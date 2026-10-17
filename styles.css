@@ -1,0 +1,302 @@
+/* Horizontal scroll instead of overflowing the note for wide tables. */
+.dream-table-wrapper {
+	overflow-x: auto;
+	margin: var(--p-spacing) 0;
+	/*
+	 * In Live Preview the table sits inside a CodeMirror line, which uses
+	 * `white-space: pre-wrap`. Inherited, it turns the newlines between the
+	 * rendered elements (<p>, <li>, after <br>) into extra blank lines.
+	 */
+	white-space: normal;
+}
+
+.dream-table {
+	border-collapse: collapse;
+}
+
+.dream-table td {
+	border: var(--table-border-width) solid var(--table-border-color);
+	/* Default only; table and cell padding settings are applied inline. */
+	padding: var(--size-4-1) var(--size-4-2);
+	vertical-align: top;
+}
+
+/* Also set directly, in case a theme puts pre-wrap on cells or text blocks. */
+.dream-table td,
+.dream-table td :is(p, ul, ol, li, blockquote) {
+	white-space: normal;
+}
+
+/* Cells are compact: no outer margins, small gaps between blocks. */
+.dream-table td :is(p, ul, ol, blockquote, pre, h1, h2, h3, h4, h5, h6) {
+	margin-block: 0;
+}
+
+.dream-table td > * + * {
+	margin-top: var(--size-4-1);
+}
+
+/*
+ * Headings in cells use the theme's heading variables directly. Table and
+ * Live Preview rules otherwise flatten them to the cell's font size. Color is
+ * inherited so a cell's text color applies to its headings too.
+ */
+
+.dream-table-wrapper .dream-table td h1 {
+	font-size: var(--h1-size, 1.802em);
+	font-weight: var(--h1-weight, 700);
+	line-height: var(--h1-line-height, var(--line-height-tight));
+	font-family: var(--h1-font, var(--font-text));
+	font-style: var(--h1-style, normal);
+	font-variant: var(--h1-variant, normal);
+	letter-spacing: var(--h1-letter-spacing, normal);
+	color: inherit;
+}
+
+.dream-table-wrapper .dream-table td h2 {
+	font-size: var(--h2-size, 1.602em);
+	font-weight: var(--h2-weight, 700);
+	line-height: var(--h2-line-height, var(--line-height-tight));
+	font-family: var(--h2-font, var(--font-text));
+	font-style: var(--h2-style, normal);
+	font-variant: var(--h2-variant, normal);
+	letter-spacing: var(--h2-letter-spacing, normal);
+	color: inherit;
+}
+
+.dream-table-wrapper .dream-table td h3 {
+	font-size: var(--h3-size, 1.424em);
+	font-weight: var(--h3-weight, 700);
+	line-height: var(--h3-line-height, var(--line-height-tight));
+	font-family: var(--h3-font, var(--font-text));
+	font-style: var(--h3-style, normal);
+	font-variant: var(--h3-variant, normal);
+	letter-spacing: var(--h3-letter-spacing, normal);
+	color: inherit;
+}
+
+.dream-table-wrapper .dream-table td h4 {
+	font-size: var(--h4-size, 1.266em);
+	font-weight: var(--h4-weight, 700);
+	line-height: var(--h4-line-height, var(--line-height-tight));
+	font-family: var(--h4-font, var(--font-text));
+	font-style: var(--h4-style, normal);
+	font-variant: var(--h4-variant, normal);
+	letter-spacing: var(--h4-letter-spacing, normal);
+	color: inherit;
+}
+
+.dream-table-wrapper .dream-table td h5 {
+	font-size: var(--h5-size, 1.125em);
+	font-weight: var(--h5-weight, 700);
+	line-height: var(--h5-line-height, var(--line-height-tight));
+	font-family: var(--h5-font, var(--font-text));
+	font-style: var(--h5-style, normal);
+	font-variant: var(--h5-variant, normal);
+	letter-spacing: var(--h5-letter-spacing, normal);
+	color: inherit;
+}
+
+.dream-table-wrapper .dream-table td h6 {
+	font-size: var(--h6-size, 1em);
+	font-weight: var(--h6-weight, 700);
+	line-height: var(--h6-line-height, var(--line-height-tight));
+	font-family: var(--h6-font, var(--font-text));
+	font-style: var(--h6-style, normal);
+	font-variant: var(--h6-variant, normal);
+	letter-spacing: var(--h6-letter-spacing, normal);
+	color: inherit;
+}
+
+.dream-table td :is(ul, ol) {
+	padding-inline-start: var(--size-4-5);
+}
+
+.dream-table td li {
+	margin-block: 0;
+}
+
+.dream-table-error {
+	border: 1px solid var(--background-modifier-error);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2) var(--size-4-3);
+	color: var(--text-error);
+}
+
+.dream-table-error ul {
+	margin: var(--size-4-1) 0 0;
+}
+
+/* ---------------------------------------------------------------- editor */
+
+.dream-table-editor {
+	outline: none;
+}
+
+.dream-table-editor td {
+	cursor: cell;
+	user-select: none;
+}
+
+/* Tint selected cells without hiding their own background color. */
+.dream-table td.is-selected {
+	background-image: linear-gradient(
+		color-mix(in srgb, var(--interactive-accent) 20%, transparent),
+		color-mix(in srgb, var(--interactive-accent) 20%, transparent)
+	);
+}
+
+.dream-table-editor:focus-within td.is-focus {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: -2px;
+}
+
+/* The textarea fills the cell's content box, so the padding stays put while editing. */
+.dream-table td.is-editing {
+	cursor: text;
+	box-shadow: inset 0 0 0 2px var(--interactive-accent);
+}
+
+.dream-table-input {
+	display: block;
+	width: 100%;
+	min-width: 8em;
+	min-height: 100%;
+	resize: none;
+	border: none;
+	border-radius: 0;
+	margin: 0;
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	white-space: pre-wrap;
+	background: transparent;
+	box-shadow: none;
+}
+
+/* Obsidian styles focused inputs; the cell already shows that it is being edited. */
+.dream-table-input:focus,
+.dream-table-input:focus-visible {
+	outline: none;
+	box-shadow: none;
+}
+
+/* A fixed column width wins over the textarea's minimum. */
+.dream-table.has-fixed-widths .dream-table-input {
+	min-width: 0;
+}
+
+.dream-table-swatches {
+	display: grid;
+	grid-template-columns: repeat(8, 2em);
+	gap: var(--size-4-2);
+}
+
+.dream-table-swatch {
+	width: 2em;
+	height: 2em;
+	padding: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+
+.dream-table-swatch.is-active {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.dream-table-color-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: var(--size-4-3);
+}
+
+/* ---------------------------------------------------------- column resize */
+
+.dream-table-editor.is-resize-hover td,
+.dream-table-editor.is-resizing,
+.dream-table-editor.is-resizing td {
+	cursor: col-resize;
+}
+
+/* With fixed widths, long words wrap instead of spilling into the next column. */
+.dream-table.has-fixed-widths td {
+	overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------- padding picker */
+
+.dream-table-padding-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+}
+
+.dream-table-padding-footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-3);
+}
+
+.dream-table-padding-custom input {
+	width: 5em;
+}
+
+.dream-table-padding-custom input.is-invalid {
+	border-color: var(--background-modifier-error);
+}
+
+/* ---------------------------------------------------------- border picker */
+
+.dream-table-border-row + .dream-table-border-row {
+	margin-top: var(--size-4-3);
+}
+
+.dream-table-border-heading {
+	font-weight: var(--font-semibold);
+	margin-bottom: var(--size-4-1);
+}
+
+.dream-table-border-options {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.dream-table-border-options button.is-active:not(.dream-table-swatch) {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.dream-table-border-options input[type="color"].is-active {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.dream-table-border-width-input {
+	width: 5em;
+}
+
+.dream-table-border-width-input.is-invalid {
+	border-color: var(--background-modifier-error);
+}
+
+/* Unset properties show what a cell would get from the theme. */
+.dream-table-border-preview {
+	margin-top: var(--size-4-4);
+	padding: var(--size-4-3);
+	text-align: center;
+	border: var(--table-border-width) solid var(--table-border-color);
+}
+
+.dream-table-border-footer {
+	display: flex;
+	justify-content: space-between;
+	margin-top: var(--size-4-4);
+}

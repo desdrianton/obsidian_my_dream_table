@@ -1,0 +1,25 @@
+{
+  "name": "obsidian-my-dream-table",
+  "version": "0.1.0",
+  "description": "Complex tables for Obsidian: merged cells, colors, and a visual editor.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "esbuild": "^0.25.12",
+    "happy-dom": "^21.0.3",
+    "js-yaml": "^4.3.2",
+    "obsidian": "^1.14.4",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "main": "main.js"
+}
