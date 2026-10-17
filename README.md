@@ -20,6 +20,7 @@ styles:
 ````
 
 - **`rows`**: list of rows; each cell is markdown (links, `[[wikilinks]]`, `**bold**`, ...). Short rows are padded with empty cells.
+  Images work like anywhere else in Obsidian: `![[photo.png]]`, `![[photo.png|200]]` (no need to escape `|`), or `![](https://…)`. Paste or drop an image onto a cell to save it as an attachment and embed it, or right-click → *Insert image…* to pick one from the vault. Images shrink to fit their column.
 - **`merges`**: ranges in A1 notation. Only the top-left cell's content is shown.
 - **`styles`**: rules applied in order; later rules win. Properties:
   - `bg`, `fg`: `#rgb`/`#rrggbb`, color names, `rgb()`/`hsl()`, or theme variables like `var(--color-red)`

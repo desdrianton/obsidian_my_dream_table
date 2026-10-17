@@ -1,4 +1,5 @@
 import {
+	FuzzySuggestModal,
 	MarkdownRenderChild,
 	MarkdownRenderer,
 	MarkdownView,
@@ -24,6 +25,7 @@ import type { Range } from "./model/types";
 import { renderErrors, renderTable, type RenderMarkdown } from "./render/renderTable";
 import { applyLineEdit, bodyLineCount, planBodyEdit, type BlockLocation } from "./writeback";
 import { findScrollContainer, holdScrollPosition } from "./scroll";
+import { attachmentName, isImageExtension, toEmbed } from "./images";
 
 /** How long a saved editor state waits for the re-rendered table to pick it up. */
 const STATE_HANDOFF_MS = 3000;
@@ -174,6 +176,7 @@ class DreamTableView extends MarkdownRenderChild {
 			onContextMenu: (evt, range) => this.showMenu(evt, range),
 			onError: (error) => new Notice(`Dream Table: ${error instanceof Error ? error.message : String(error)}`),
 			onFocusChange: (focused) => this.setScopeActive(focused),
+			onInsertFiles: (files) => this.saveImages(files),
 		});
 		void this.editor.render();
 	}
@@ -182,6 +185,25 @@ class DreamTableView extends MarkdownRenderChild {
 		this.editor?.destroy();
 		this.editor = null;
 		this.setScopeActive(false);
+	}
+
+	/**
+	 * Saves pasted or dropped images where Obsidian puts attachments for this
+	 * note (per the user's settings) and returns an embed for each.
+	 */
+	private async saveImages(files: File[]): Promise<string[]> {
+		const { app } = this.plugin;
+		const embeds: string[] = [];
+		const now = new Date();
+		for (const file of files) {
+			const path = await app.fileManager.getAvailablePathForAttachment(
+				attachmentName(file, now),
+				this.ctx.sourcePath,
+			);
+			const saved = await app.vault.createBinary(path, await file.arrayBuffer());
+			embeds.push(toEmbed(app.fileManager.generateMarkdownLink(saved, this.ctx.sourcePath)));
+		}
+		return embeds;
 	}
 
 	private currentScrollTop(): number | null {
@@ -255,6 +277,19 @@ class DreamTableView extends MarkdownRenderChild {
 				if (action.isChecked?.(model, range)) item.setChecked(true);
 			});
 		}
+
+		menu.addItem((item) =>
+			item
+				.setTitle("Insert image…")
+				.setIcon("image-plus")
+				.onClick(() => {
+					new ImageSuggestModal(this.plugin.app, (file) => {
+						const embed = toEmbed(this.plugin.app.fileManager.generateMarkdownLink(file, this.ctx.sourcePath));
+						this.holdScroll(scrollTop);
+						void editor.appendToSelectedCell(embed);
+					}).open();
+				}),
+		);
 
 		const style = model.getStyle(range.top, range.left);
 		/** Adds a menu item that opens a picker dialog. */
@@ -362,6 +397,29 @@ class DreamTableView extends MarkdownRenderChild {
 		});
 
 		menu.showAtMouseEvent(evt);
+	}
+}
+
+/** Searches the vault's images by path. */
+class ImageSuggestModal extends FuzzySuggestModal<TFile> {
+	constructor(
+		app: App,
+		private readonly onChoose: (file: TFile) => void,
+	) {
+		super(app);
+		this.setPlaceholder("Find an image to insert…");
+	}
+
+	override getItems(): TFile[] {
+		return this.app.vault.getFiles().filter((file) => isImageExtension(file.extension));
+	}
+
+	override getItemText(file: TFile): string {
+		return file.path;
+	}
+
+	override onChooseItem(file: TFile): void {
+		this.onChoose(file);
 	}
 }
 

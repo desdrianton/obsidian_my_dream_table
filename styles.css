@@ -133,6 +133,12 @@
 	margin: var(--size-4-1) 0 0;
 }
 
+/* Images shrink to fit their column instead of spilling into the next one. */
+.dream-table td img {
+	max-width: 100%;
+	height: auto;
+}
+
 /* ---------------------------------------------------------------- editor */
 
 .dream-table-editor {

@@ -665,6 +665,109 @@ describe("host shortcuts", () => {
 	});
 });
 
+describe("images", () => {
+	const png = () => new File(["x"], "image.png", { type: "image/png" });
+
+	/** A paste or drop event carrying files (happy-dom has no real clipboard). */
+	function transferEvent(type: "paste" | "drop" | "dragover", files: File[], types = ["Files"]) {
+		const evt = new Event(type, { bubbles: true, cancelable: true });
+		const data = { files, types, dropEffect: "none" };
+		Object.defineProperty(evt, type === "paste" ? "clipboardData" : "dataTransfer", { value: data });
+		return evt;
+	}
+
+	function mountWithImages(onInsertFiles = vi.fn(async (files: File[]) => files.map((_, i) => `![[img${i}.png]]`))) {
+		return mount(grid(), { onInsertFiles }).then(() => onInsertFiles);
+	}
+
+	it("inserts pasted images at the cursor while editing", async () => {
+		const onInsertFiles = await mountWithImages();
+		mouse(td("A1"), "dblclick");
+		input().value = "before after";
+		input().setSelectionRange(7, 7);
+		const evt = transferEvent("paste", [png()]);
+		input().dispatchEvent(evt);
+		await flush();
+		expect(evt.defaultPrevented).toBe(true);
+		expect(onInsertFiles).toHaveBeenCalledTimes(1);
+		expect(input().value).toBe("before ![[img0.png]]after");
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it("appends pasted images to the selected cell when not editing", async () => {
+		await mountWithImages();
+		mouse(td("B2"), "mousedown");
+		editor.root.dispatchEvent(transferEvent("paste", [png(), png()]));
+		await flush();
+		expect(editor.currentModel.getCell(1, 1)).toBe("B2\n![[img0.png]]\n![[img1.png]]");
+		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+
+	it("appends dropped images to the cell under the pointer", async () => {
+		const m = grid();
+		m.merge(r("B2:C3"));
+		const onInsertFiles = vi.fn(async () => ["![[drop.png]]"]);
+		await mount(m, { onInsertFiles });
+		const over = transferEvent("dragover", [png()]);
+		td("B2").dispatchEvent(over);
+		expect(over.defaultPrevented).toBe(true);
+		const drop = transferEvent("drop", [png()]);
+		td("B2").dispatchEvent(drop);
+		await flush();
+		expect(drop.defaultPrevented).toBe(true);
+		expect(editor.currentModel.getCell(1, 1)).toBe("B2\n![[drop.png]]");
+		expect(selected()).toBe("B2:C3");
+	});
+
+	it("saves an open edit before dropping into another cell", async () => {
+		await mountWithImages();
+		mouse(td("A1"), "dblclick");
+		input().value = "edited";
+		td("C3").dispatchEvent(transferEvent("drop", [png()]));
+		await flush();
+		expect(editor.currentModel.getCell(0, 0)).toBe("edited");
+		expect(editor.currentModel.getCell(2, 2)).toBe("C3\n![[img0.png]]");
+	});
+
+	it("leaves text pastes and non-image drops to the browser", async () => {
+		const onInsertFiles = await mountWithImages();
+		mouse(td("A1"), "dblclick");
+		const text = transferEvent("paste", [], ["text/plain"]);
+		input().dispatchEvent(text);
+		const pdf = transferEvent("drop", [new File(["x"], "a.pdf", { type: "application/pdf" })]);
+		td("B1").dispatchEvent(pdf);
+		expect(text.defaultPrevented).toBe(false);
+		expect(pdf.defaultPrevented).toBe(false);
+		expect(onInsertFiles).not.toHaveBeenCalled();
+	});
+
+	it("does nothing without a host to store files", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		const evt = transferEvent("paste", [png()]);
+		editor.root.dispatchEvent(evt);
+		expect(evt.defaultPrevented).toBe(false);
+	});
+
+	it("reports storage errors and changes nothing", async () => {
+		const onError = vi.fn();
+		await mount(grid(), { onError, onInsertFiles: vi.fn(async () => Promise.reject(new Error("disk full"))) });
+		mouse(td("A1"), "mousedown");
+		editor.root.dispatchEvent(transferEvent("paste", [png()]));
+		await flush();
+		expect(onError).toHaveBeenCalledWith(new Error("disk full"));
+		expect(editor.currentModel.getCell(0, 0)).toBe("A1");
+	});
+
+	it("appends markdown to the selected cell", async () => {
+		await mount(grid());
+		expect(await editor.appendToSelectedCell("![[x.png]]")).toBe(false); // nothing selected
+		mouse(td("C1"), "mousedown");
+		expect(await editor.appendToSelectedCell("![[x.png]]")).toBe(true);
+		expect(editor.currentModel.getCell(0, 2)).toBe("C1\n![[x.png]]");
+	});
+});
+
 describe("destroy", () => {
 	it("removes the editor and stops listening", async () => {
 		await mount(grid());

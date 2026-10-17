@@ -2,6 +2,7 @@ import { normalizeRange } from "../model/address";
 import { rangeContainsCell } from "../model/range";
 import type { TableModel } from "../model/TableModel";
 import type { CellRef, Range } from "../model/types";
+import { appendToCell, imageFilesFrom } from "../images";
 import { applyColumnWidths, renderTable, type RenderMarkdown } from "../render/renderTable";
 import { clearContent, TABLE_ACTIONS } from "./actions";
 import { applyToTextarea, insertLink, toggleMarker, type TextEdit, type TextState } from "./markdownShortcuts";
@@ -31,6 +32,12 @@ export interface TableEditorOptions {
 	 * e.g. so Ctrl+B formats the cell instead of the surrounding note.
 	 */
 	onFocusChange?: (focused: boolean) => void;
+	/**
+	 * Stores image files pasted or dropped onto the table and returns the
+	 * markdown to insert for each (e.g. `![[Pasted image.png]]`). Without
+	 * it, image pastes and drops are left to the browser.
+	 */
+	onInsertFiles?: (files: File[]) => Promise<string[]>;
 	initialState?: EditorState;
 }
 
@@ -105,6 +112,9 @@ export class TableEditor {
 		this.root.addEventListener("keydown", this.onKeyDown);
 		this.root.addEventListener("focusin", this.onFocusIn);
 		this.root.addEventListener("focusout", this.onFocusOut);
+		this.root.addEventListener("paste", this.onPaste);
+		this.root.addEventListener("dragover", this.onDragOver);
+		this.root.addEventListener("drop", this.onDrop);
 		this.doc.addEventListener("mouseup", this.onMouseUp);
 		this.doc.addEventListener("mousemove", this.onDocumentMouseMove);
 		// Removing a focused element (on re-render) may not fire focusout, so
@@ -509,6 +519,82 @@ export class TableEditor {
 			return true;
 		}
 		return false;
+	}
+
+	// --------------------------------------------------------------- images
+
+	/** Image pastes: at the cursor while editing, else appended to the focused cell. */
+	private readonly onPaste = (evt: ClipboardEvent) => {
+		const files = imageFilesFrom(evt.clipboardData);
+		if (files.length === 0 || !this.options.onInsertFiles) return;
+		const target = this.editing?.cell ?? this.selection?.focus;
+		if (!target) return;
+		evt.preventDefault();
+		evt.stopPropagation();
+		void this.insertImages(files, target);
+	};
+
+	/** Allows dropping files on cells (the browser would otherwise open them). */
+	private readonly onDragOver = (evt: DragEvent) => {
+		if (!this.options.onInsertFiles || !evt.dataTransfer?.types.includes("Files")) return;
+		if (!this.cellFromEvent(evt)) return;
+		evt.preventDefault();
+		evt.stopPropagation();
+		evt.dataTransfer.dropEffect = "copy";
+	};
+
+	/** Image drops: at the cursor in the cell being edited, else appended to the cell under the pointer. */
+	private readonly onDrop = (evt: DragEvent) => {
+		const files = imageFilesFrom(evt.dataTransfer);
+		const cell = this.cellFromEvent(evt);
+		if (files.length === 0 || !cell || !this.options.onInsertFiles) return;
+		evt.preventDefault();
+		evt.stopPropagation();
+		void this.insertImages(files, snapToAnchor(this.model, cell));
+	};
+
+	/**
+	 * Saves the images through the host and puts their markdown into `cell`:
+	 * at the cursor if that cell is being edited, otherwise on a new line at
+	 * the end of its content.
+	 */
+	async insertImages(files: File[], cell: CellRef): Promise<boolean> {
+		let snippets: string[];
+		try {
+			snippets = (await this.options.onInsertFiles?.(files)) ?? [];
+		} catch (error) {
+			this.options.onError?.(error);
+			return false;
+		}
+		if (snippets.length === 0) return false;
+		const text = snippets.join("\n");
+
+		const editing = this.editing;
+		if (editing && editing.cell.row === cell.row && editing.cell.col === cell.col) {
+			const { input } = editing;
+			const start = input.selectionStart;
+			const end = start + text.length;
+			applyToTextarea(input, { from: start, to: input.selectionEnd, insert: text, selectionStart: end, selectionEnd: end });
+			return true;
+		}
+		if (editing) await this.commitEdit();
+		if (!this.inBounds(cell)) return false;
+		const target = snapToAnchor(this.model, cell);
+		return this.applyChange((model) => {
+			model.setCell(target.row, target.col, appendToCell(model.getCell(target.row, target.col), text));
+			return { top: target.row, left: target.col, bottom: target.row, right: target.col };
+		});
+	}
+
+	/** Appends markdown (e.g. an image embed) to the selected cell. */
+	appendToSelectedCell(markdown: string): Promise<boolean> {
+		const focus = this.selection?.focus;
+		if (!focus) return Promise.resolve(false);
+		const target = snapToAnchor(this.model, focus);
+		return this.applyChange((model) => {
+			model.setCell(target.row, target.col, appendToCell(model.getCell(target.row, target.col), markdown));
+			return { top: target.row, left: target.col, bottom: target.row, right: target.col };
+		});
 	}
 
 	private readonly onFocusIn = () => {
