@@ -10,6 +10,10 @@ export const MAX_COLUMN_WIDTH = 5000;
 export const MIN_PADDING = 0;
 export const MAX_PADDING = 100;
 
+/** Allowed line height, as a multiple of the font size (like CSS `line-height: 1.5`). */
+export const MIN_LINE_HEIGHT = 0.5;
+export const MAX_LINE_HEIGHT = 5;
+
 /** Allowed border width (px). */
 export const MIN_BORDER_WIDTH = 0;
 export const MAX_BORDER_WIDTH = 20;
@@ -47,6 +51,8 @@ export interface CellStyle {
 	borderColor?: string | null;
 	borderWidth?: number | null;
 	borderStyle?: BorderStyle | null;
+	/** Line height as a multiple of the font size; overrides the table line height. */
+	lineHeight?: number | null;
 }
 
 export const STYLE_KEYS = [
@@ -60,6 +66,7 @@ export const STYLE_KEYS = [
 	"borderColor",
 	"borderWidth",
 	"borderStyle",
+	"lineHeight",
 ] as const;
 export type StyleKey = (typeof STYLE_KEYS)[number];
 
@@ -102,4 +109,6 @@ export interface TableData {
 	padding?: number;
 	/** Default border for every cell; style rules can override it. */
 	border?: Border;
+	/** Default line height for every cell; style rules can override it. */
+	lineHeight?: number;
 }

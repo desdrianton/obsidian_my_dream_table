@@ -5,7 +5,9 @@ import {
 	BORDER_STYLES,
 	MAX_BORDER_WIDTH,
 	MAX_COLUMN_WIDTH,
+	MAX_LINE_HEIGHT,
 	MAX_PADDING,
+	MIN_LINE_HEIGHT,
 	MIN_BORDER_WIDTH,
 	type Border,
 	MIN_COLUMN_WIDTH,
@@ -29,6 +31,8 @@ export interface ParsedTable {
 	padding: number | null;
 	/** Table-wide default border; empty for the theme default. */
 	border: Border;
+	/** Table-wide default line height, or null for the theme default. */
+	lineHeight: number | null;
 }
 
 export type ParseResult =
@@ -58,6 +62,7 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
 	"widths",
 	"padding",
 	"border",
+	"lineHeight",
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -99,11 +104,16 @@ export function parseTableData(input: unknown): ParseResult {
 	}
 
 	const border = parseBorder(input.border, errors);
+	let lineHeight: number | null = null;
+	if (input.lineHeight !== undefined && input.lineHeight !== null) {
+		if (isValidLineHeight(input.lineHeight)) lineHeight = roundLineHeight(input.lineHeight);
+		else errors.push(`\`lineHeight\` ${LINE_HEIGHT_ERROR}`);
+	}
 
 	if (errors.length > 0) {
 		return { ok: false, errors };
 	}
-	return { ok: true, table: { rows, merges, styles, widths, padding, border } };
+	return { ok: true, table: { rows, merges, styles, widths, padding, border, lineHeight } };
 }
 
 function checkVersion(version: unknown, errors: string[]): void {
@@ -248,7 +258,8 @@ function parseStyles(value: unknown, errors: string[]): StyleRule[] {
 				valid = false;
 				continue;
 			}
-			(style as Record<string, unknown>)[key] = prop;
+			(style as Record<string, unknown>)[key] =
+				key === "lineHeight" && typeof prop === "number" ? roundLineHeight(prop) : prop;
 		}
 
 		if (valid && range) rules.push({ range, style });
@@ -295,6 +306,22 @@ export function isBorderStyle(value: unknown): value is (typeof BORDER_STYLES)[n
 	return (BORDER_STYLES as readonly unknown[]).includes(value);
 }
 
+const LINE_HEIGHT_ERROR = `must be a number from ${MIN_LINE_HEIGHT} to ${MAX_LINE_HEIGHT}, e.g. 1.5.`;
+
+export function isValidLineHeight(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isFinite(value) &&
+		value >= MIN_LINE_HEIGHT &&
+		value <= MAX_LINE_HEIGHT
+	);
+}
+
+/** Line heights are kept to two decimals so files stay tidy. */
+export function roundLineHeight(value: number): number {
+	return Math.round(value * 100) / 100;
+}
+
 const PADDING_ERROR = `must be a whole number of pixels from ${MIN_PADDING} to ${MAX_PADDING}.`;
 
 export function isValidPadding(value: unknown): value is number {
@@ -326,5 +353,7 @@ function validateStyleValue(key: StyleKey, value: unknown): string | null {
 				: `must be one of ${VALIGN_VALUES.join(", ")}.`;
 		case "padding":
 			return isValidPadding(value) ? null : PADDING_ERROR;
+		case "lineHeight":
+			return isValidLineHeight(value) ? null : LINE_HEIGHT_ERROR;
 	}
 }

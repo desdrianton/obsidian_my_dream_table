@@ -1,5 +1,6 @@
 import { isSingleCell, rangesEqual, rangesIntersect } from "../model/range";
 import type { TableModel } from "../model/TableModel";
+import { roundLineHeight } from "../model/schema";
 import type { BorderStyle, CellStyle, HorizontalAlign, Range } from "../model/types";
 
 /**
@@ -216,6 +217,11 @@ export function setColor(model: TableModel, range: Range, key: "bg" | "fg", colo
 /** Sets or (with null) removes the cell padding override on a range. */
 export function setPadding(model: TableModel, range: Range, padding: number | null): void {
 	model.applyStyle(range, { padding });
+}
+
+/** Sets or (with null) removes the line height override on a range. */
+export function setLineHeight(model: TableModel, range: Range, lineHeight: number | null): void {
+	model.applyStyle(range, { lineHeight: lineHeight === null ? null : roundLineHeight(lineHeight) });
 }
 
 /** Sets the cell border override on a range; null properties fall back to the table border. */

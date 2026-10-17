@@ -24,6 +24,10 @@ export function serializeTable(data: TableData): string {
 		lines.push(`padding: ${data.padding}`);
 	}
 
+	if (data.lineHeight !== undefined) {
+		lines.push(`lineHeight: ${data.lineHeight}`);
+	}
+
 	if (data.border && Object.keys(data.border).length > 0) {
 		const parts: string[] = [];
 		if (data.border.color !== undefined) parts.push(`color: ${quote(data.border.color)}`);

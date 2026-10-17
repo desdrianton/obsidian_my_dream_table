@@ -14,7 +14,9 @@ import {
 	isBorderStyle,
 	isValidBorderWidth,
 	isValidColor,
+	isValidLineHeight,
 	isValidPadding,
+	roundLineHeight,
 	parseTableData,
 	type ParsedTable,
 } from "./schema";
@@ -22,7 +24,9 @@ import {
 	FORMAT_VERSION,
 	MAX_BORDER_WIDTH,
 	MAX_COLUMN_WIDTH,
+	MAX_LINE_HEIGHT,
 	MAX_PADDING,
+	MIN_LINE_HEIGHT,
 	MIN_BORDER_WIDTH,
 	type Border,
 	type BorderStyle,
@@ -53,6 +57,7 @@ export class TableModel {
 	private widths: ColumnWidth[];
 	private defaultPadding: number | null;
 	private defaultBorder: Border;
+	private defaultLineHeight: number | null;
 
 	private constructor(table: ParsedTable) {
 		this.rows = table.rows.map((row) => [...row]);
@@ -64,6 +69,7 @@ export class TableModel {
 		this.widths = [...table.widths];
 		this.defaultPadding = table.padding;
 		this.defaultBorder = { ...table.border };
+		this.defaultLineHeight = table.lineHeight;
 	}
 
 	/** Builds a model from the raw (e.g. YAML-parsed) code block value. */
@@ -79,7 +85,7 @@ export class TableModel {
 		assertCount(colCount, "colCount");
 		const rows = Array.from({ length: rowCount }, () => Array<string>(colCount).fill(""));
 		const widths = Array<ColumnWidth>(colCount).fill(null);
-		return new TableModel({ rows, merges: [], styles: [], widths, padding: null, border: {} });
+		return new TableModel({ rows, merges: [], styles: [], widths, padding: null, border: {}, lineHeight: null });
 	}
 
 	clone(): TableModel {
@@ -90,6 +96,7 @@ export class TableModel {
 			widths: this.widths,
 			padding: this.defaultPadding,
 			border: this.defaultBorder,
+			lineHeight: this.defaultLineHeight,
 		});
 	}
 
@@ -115,6 +122,7 @@ export class TableModel {
 		}
 		if (this.defaultPadding !== null) data.padding = this.defaultPadding;
 		if (Object.keys(this.defaultBorder).length > 0) data.border = { ...this.defaultBorder };
+		if (this.defaultLineHeight !== null) data.lineHeight = this.defaultLineHeight;
 		return data;
 	}
 
@@ -329,6 +337,27 @@ export class TableModel {
 	/** Padding (px) a cell is drawn with: its own style, else the table default. */
 	getPadding(row: number, col: number): number | null {
 		return this.getStyle(row, col).padding ?? this.defaultPadding;
+	}
+
+	// ---------------------------------------------------------- line height
+
+	/** Default line height for every cell, or null for the theme default. */
+	get tableLineHeight(): number | null {
+		return this.defaultLineHeight;
+	}
+
+	set tableLineHeight(lineHeight: number | null) {
+		if (lineHeight !== null && !isValidLineHeight(lineHeight)) {
+			throw new RangeError(
+				`Line height must be a number from ${MIN_LINE_HEIGHT} to ${MAX_LINE_HEIGHT}, got ${lineHeight}.`,
+			);
+		}
+		this.defaultLineHeight = lineHeight === null ? null : roundLineHeight(lineHeight);
+	}
+
+	/** Line height a cell is drawn with: its own style, else the table default. */
+	getLineHeight(row: number, col: number): number | null {
+		return this.getStyle(row, col).lineHeight ?? this.defaultLineHeight;
 	}
 
 	// --------------------------------------------------------------- border

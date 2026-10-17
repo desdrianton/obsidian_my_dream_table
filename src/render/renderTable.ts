@@ -7,6 +7,9 @@ export type RenderMarkdown = (markdown: string, el: HTMLElement) => Promise<void
 
 export const CLASS_PREFIX = "dream-table";
 
+/** CSS variable carrying a cell's line height to the blocks inside it (see styles.css). */
+export const LINE_HEIGHT_VAR = "--dream-table-line-height";
+
 /** Width (px) used for automatic columns once other columns have a fixed width. */
 export const DEFAULT_COLUMN_WIDTH = 120;
 
@@ -52,11 +55,14 @@ export async function renderTable(
 				td.rowSpan = merge.bottom - merge.top + 1;
 				td.colSpan = merge.right - merge.left + 1;
 			}
-			// Padding is resolved per cell (own style, else table default) and set
-			// inline, so theme rules for table cells cannot override it.
+			// Padding and line height are resolved per cell (own style, else the
+			// table default) and set inline, so theme rules cannot override them.
+			const style = { ...model.getStyle(row, col) };
 			const padding = model.getPadding(row, col);
-			const style = model.getStyle(row, col);
-			applyCellStyle(td, padding === null ? style : { ...style, padding });
+			const lineHeight = model.getLineHeight(row, col);
+			if (padding !== null) style.padding = padding;
+			if (lineHeight !== null) style.lineHeight = lineHeight;
+			applyCellStyle(td, style);
 			applyCellBorder(td, model.getBorder(row, col));
 
 			const content = model.getCell(row, col);
@@ -113,6 +119,12 @@ export function applyCellStyle(el: HTMLElement, style: ResolvedStyle): void {
 	if (style.align) el.style.textAlign = style.align;
 	if (style.valign) el.style.verticalAlign = style.valign;
 	if (style.padding !== undefined) el.style.padding = `${style.padding}px`;
+	if (style.lineHeight !== undefined) {
+		el.style.lineHeight = String(style.lineHeight);
+		// Also handed to paragraphs and list items inside, which themes may style directly.
+		el.style.setProperty(LINE_HEIGHT_VAR, String(style.lineHeight));
+		el.classList.add("has-line-height");
+	}
 }
 
 /** Shows parse errors in place of the table. */

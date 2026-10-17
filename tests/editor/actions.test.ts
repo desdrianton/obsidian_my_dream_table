@@ -5,6 +5,7 @@ import {
 	clearContent,
 	setBorder,
 	setColor,
+	setLineHeight,
 	setPadding,
 	TABLE_ACTIONS,
 	type TableAction,
@@ -182,6 +183,16 @@ describe("formatting", () => {
 		expect(m.getBorder(0, 1)).toEqual({ color: "red", width: 3, style: "double" });
 		setBorder(m, r("A1:B1"), { color: null, width: null, style: null });
 		expect(m.getBorder(0, 1)).toEqual({ color: "gray", width: 1 });
+		expect(m.styles).toEqual([]);
+	});
+
+	it("sets, rounds, and removes cell line height", () => {
+		const m = grid();
+		m.tableLineHeight = 1.5;
+		setLineHeight(m, r("A1:B1"), 1.999);
+		expect(m.getLineHeight(0, 1)).toBe(2);
+		setLineHeight(m, r("A1:B1"), null);
+		expect(m.getLineHeight(0, 1)).toBe(1.5);
 		expect(m.styles).toEqual([]);
 	});
 

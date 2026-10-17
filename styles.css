@@ -108,6 +108,12 @@
 	color: inherit;
 }
 
+/* A cell's line height also reaches the text blocks inside it. Headings keep their own. */
+.dream-table td.has-line-height,
+.dream-table td.has-line-height :is(p, li, ul, ol, blockquote, div, span) {
+	line-height: var(--dream-table-line-height);
+}
+
 .dream-table td :is(ul, ol) {
 	padding-inline-start: var(--size-4-5);
 }
@@ -226,15 +232,15 @@
 	overflow-wrap: anywhere;
 }
 
-/* --------------------------------------------------------- padding picker */
+/* ------------------------------------- value pickers (padding, line height) */
 
-.dream-table-padding-presets {
+.dream-table-value-presets {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--size-4-2);
 }
 
-.dream-table-padding-footer {
+.dream-table-value-footer {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -243,11 +249,11 @@
 	margin-top: var(--size-4-3);
 }
 
-.dream-table-padding-custom input {
+.dream-table-value-custom input {
 	width: 5em;
 }
 
-.dream-table-padding-custom input.is-invalid {
+.dream-table-value-custom input.is-invalid {
 	border-color: var(--background-modifier-error);
 }
 

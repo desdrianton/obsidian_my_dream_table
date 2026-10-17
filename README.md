@@ -27,10 +27,12 @@ styles:
   - `align`: `left` / `center` / `right`
   - `valign`: `top` / `middle` / `bottom`
   - `padding`: space between border and content in px (0–100), overrides the table padding
+  - `lineHeight`: line height as a multiple of the font size (0.5–5, e.g. `1.5`), overrides the table line height
   - `borderColor`, `borderWidth` (px, 0–20), `borderStyle` (`solid` / `dashed` / `dotted` / `double` / `none`): border on all sides of each cell, overriding the table border
   - `null` resets a property to the default
 - **`widths`**: column widths in px, e.g. `[120, null, 80]`. `null` (or a missing entry) means automatic. Drag a column border in the table to set them; right-click → *Reset column widths* to go back to automatic.
 - **`padding`**: default cell padding in px (0–100) for the whole table. Right-click → *Table padding…* / *Cell padding…* to set it from the table.
+- **`lineHeight`**: default line height for every cell (0.5–5). Right-click → *Table line height…* / *Cell line height…* to set it from the table.
 - **`border`**: default border for every cell, e.g. `{ color: "#888888", width: 1, style: "solid" }`. Any property may be left out to use the theme. Right-click → *Table border…* / *Cell border…* to set it from the table.
 - **`version`**: format version, optional (currently `1`).
 

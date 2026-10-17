@@ -242,6 +242,28 @@ describe("padding", () => {
 	});
 });
 
+describe("line height", () => {
+	it("leaves line height to the stylesheet without any setting", async () => {
+		const table = await renderTable(model({ rows: [["a"]] }), container, fakeMarkdown);
+		const td = table.rows[0]!.cells[0]!;
+		expect(td.style.lineHeight).toBe("");
+		expect(td.classList.contains("has-line-height")).toBe(false);
+	});
+
+	it("applies the table default and cell overrides inline", async () => {
+		const table = await renderTable(
+			model({ rows: [["a", "b"]], lineHeight: 1.5, styles: [{ range: "B1", lineHeight: 2 }] }),
+			container,
+			fakeMarkdown,
+		);
+		const [a, b] = Array.from(table.rows[0]!.cells);
+		expect(a!.style.lineHeight).toBe("1.5");
+		expect(a!.style.getPropertyValue("--dream-table-line-height")).toBe("1.5");
+		expect(a!.classList.contains("has-line-height")).toBe(true);
+		expect(b!.style.lineHeight).toBe("2");
+	});
+});
+
 describe("borders", () => {
 	it("leaves borders to the stylesheet without any setting", async () => {
 		const table = await renderTable(model({ rows: [["a"]] }), container, fakeMarkdown);

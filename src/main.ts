@@ -13,9 +13,9 @@ import {
 	type MarkdownPostProcessorContext,
 } from "obsidian";
 import { CODE_BLOCK_LANGUAGE, createStarterTable, parseCodeBlock, toCodeBlock } from "./codeblock";
-import { setBorder, setColor, setPadding, TABLE_ACTIONS, type TableAction } from "./editor/actions";
-import { buildBorderPicker, type BorderChoice } from "./editor/borderPicker";
-import { buildPaddingPicker } from "./editor/paddingPicker";
+import { setBorder, setColor, setLineHeight, setPadding, TABLE_ACTIONS, type TableAction } from "./editor/actions";
+import { buildBorderPicker } from "./editor/borderPicker";
+import { buildLineHeightPicker, buildPaddingPicker } from "./editor/paddingPicker";
 import { BACKGROUND_SWATCHES, buildColorPicker, TEXT_SWATCHES, type Swatch } from "./editor/colorPicker";
 import { SHORTCUT_KEYS, TableEditor, type EditorState } from "./editor/TableEditor";
 import { serializeTable } from "./model/serialize";
@@ -256,169 +256,128 @@ class DreamTableView extends MarkdownRenderChild {
 			});
 		}
 
-		menu.addSeparator();
 		const style = model.getStyle(range.top, range.left);
-		const colorItem = (title: string, icon: string, key: "bg" | "fg", swatches: readonly Swatch[]) =>
+		/** Adds a menu item that opens a picker dialog. */
+		const pickerItem = (title: string, icon: string, render: (el: HTMLElement, close: () => void) => void) =>
 			menu.addItem((item) =>
 				item
 					.setTitle(title)
 					.setIcon(icon)
-					.onClick(() => {
-						new ColorModal(this.plugin.app, title, swatches, style[key], (color) => {
-							void this.applyKeepingScroll(scrollTop, (m) => {
-								setColor(m, range, key, color);
-								return range;
-							});
-						}).open();
-					}),
+					.onClick(() => new PickerModal(this.plugin.app, title.replace(/…$/, ""), render).open()),
+			);
+		/** Saves a change made from a picker, keeping the scroll position from when the menu opened. */
+		const apply = (mutate: (m: TableModel) => void) =>
+			void this.applyKeepingScroll(scrollTop, (m) => {
+				mutate(m);
+				return range;
+			});
+
+		menu.addSeparator();
+		const colorItem = (title: string, icon: string, key: "bg" | "fg", swatches: readonly Swatch[]) =>
+			pickerItem(title, icon, (el, close) =>
+				buildColorPicker(el, {
+					swatches,
+					current: style[key],
+					onPick: (color) => {
+						close();
+						apply((m) => setColor(m, range, key, color));
+					},
+				}),
 			);
 		colorItem("Background color…", "paint-bucket", "bg", BACKGROUND_SWATCHES);
 		colorItem("Text color…", "palette", "fg", TEXT_SWATCHES);
 
+		// Cell-level settings, each overriding the table-level one below.
 		menu.addSeparator();
-		menu.addItem((item) =>
-			item
-				.setTitle("Cell padding…")
-				.setIcon("square-dashed")
-				.onClick(() => {
-					new PaddingModal(this.plugin.app, "Cell padding", style.padding ?? null, "Use table padding", (padding) => {
-						void this.applyKeepingScroll(scrollTop, (m) => {
-							setPadding(m, range, padding);
-							return range;
-						});
-					}).open();
-				}),
+		pickerItem("Cell padding…", "square-dashed", (el, close) =>
+			buildPaddingPicker(el, {
+				current: style.padding ?? null,
+				resetLabel: "Use table padding",
+				onPick: (padding) => {
+					close();
+					apply((m) => setPadding(m, range, padding));
+				},
+			}),
 		);
-		menu.addItem((item) =>
-			item
-				.setTitle("Cell border…")
-				.setIcon("square")
-				.onClick(() => {
-					const current: BorderChoice = {
-						color: style.borderColor ?? null,
-						width: style.borderWidth ?? null,
-						style: style.borderStyle ?? null,
-					};
-					new BorderModal(this.plugin.app, "Cell border", current, "Use table border", (choice) => {
-						void this.applyKeepingScroll(scrollTop, (m) => {
-							setBorder(m, range, choice);
-							return range;
-						});
-					}).open();
-				}),
+		pickerItem("Cell line height…", "baseline", (el, close) =>
+			buildLineHeightPicker(el, {
+				current: style.lineHeight ?? null,
+				resetLabel: "Use table line height",
+				onPick: (lineHeight) => {
+					close();
+					apply((m) => setLineHeight(m, range, lineHeight));
+				},
+			}),
 		);
-		menu.addItem((item) =>
-			item
-				.setTitle("Table border…")
-				.setIcon("table-2")
-				.onClick(() => {
-					const border = model.tableBorder;
-					const current: BorderChoice = {
-						color: border.color ?? null,
-						width: border.width ?? null,
-						style: border.style ?? null,
-					};
-					new BorderModal(this.plugin.app, "Table border", current, "Theme default", (choice) => {
-						void this.applyKeepingScroll(scrollTop, (m) => {
-							m.updateTableBorder(choice);
-						});
-					}).open();
-				}),
+		pickerItem("Cell border…", "square", (el, close) =>
+			buildBorderPicker(el, {
+				current: {
+					color: style.borderColor ?? null,
+					width: style.borderWidth ?? null,
+					style: style.borderStyle ?? null,
+				},
+				resetLabel: "Use table border",
+				onApply: (choice) => {
+					close();
+					apply((m) => setBorder(m, range, choice));
+				},
+			}),
 		);
-		menu.addItem((item) =>
-			item
-				.setTitle("Table padding…")
-				.setIcon("table")
-				.onClick(() => {
-					new PaddingModal(this.plugin.app, "Table padding", model.tablePadding, "Theme default", (padding) => {
-						void this.applyKeepingScroll(scrollTop, (m) => {
-							m.tablePadding = padding;
-						});
-					}).open();
-				}),
+
+		menu.addSeparator();
+		pickerItem("Table padding…", "table", (el, close) =>
+			buildPaddingPicker(el, {
+				current: model.tablePadding,
+				resetLabel: "Theme default",
+				onPick: (padding) => {
+					close();
+					apply((m) => {
+						m.tablePadding = padding;
+					});
+				},
+			}),
 		);
+		pickerItem("Table line height…", "text", (el, close) =>
+			buildLineHeightPicker(el, {
+				current: model.tableLineHeight,
+				resetLabel: "Theme default",
+				onPick: (lineHeight) => {
+					close();
+					apply((m) => {
+						m.tableLineHeight = lineHeight;
+					});
+				},
+			}),
+		);
+		pickerItem("Table border…", "table-2", (el, close) => {
+			const border = model.tableBorder;
+			buildBorderPicker(el, {
+				current: { color: border.color ?? null, width: border.width ?? null, style: border.style ?? null },
+				resetLabel: "Theme default",
+				onApply: (choice) => {
+					close();
+					apply((m) => m.updateTableBorder(choice));
+				},
+			});
+		});
 
 		menu.showAtMouseEvent(evt);
 	}
 }
 
-class BorderModal extends Modal {
+/** A dialog whose content is built by one of the picker builders. */
+class PickerModal extends Modal {
 	constructor(
 		app: App,
 		private readonly title: string,
-		private readonly current: BorderChoice,
-		private readonly resetLabel: string,
-		private readonly onApply: (choice: BorderChoice) => void,
+		private readonly render: (el: HTMLElement, close: () => void) => void,
 	) {
 		super(app);
 	}
 
 	override onOpen(): void {
 		this.titleEl.setText(this.title);
-		buildBorderPicker(this.contentEl, {
-			current: this.current,
-			resetLabel: this.resetLabel,
-			onApply: (choice) => {
-				this.close();
-				this.onApply(choice);
-			},
-		});
-	}
-
-	override onClose(): void {
-		this.contentEl.empty();
-	}
-}
-
-class PaddingModal extends Modal {
-	constructor(
-		app: App,
-		private readonly title: string,
-		private readonly current: number | null,
-		private readonly resetLabel: string,
-		private readonly onPick: (padding: number | null) => void,
-	) {
-		super(app);
-	}
-
-	override onOpen(): void {
-		this.titleEl.setText(this.title);
-		buildPaddingPicker(this.contentEl, {
-			current: this.current,
-			resetLabel: this.resetLabel,
-			onPick: (padding) => {
-				this.close();
-				this.onPick(padding);
-			},
-		});
-	}
-
-	override onClose(): void {
-		this.contentEl.empty();
-	}
-}
-
-class ColorModal extends Modal {
-	constructor(
-		app: App,
-		private readonly title: string,
-		private readonly swatches: readonly Swatch[],
-		private readonly current: string | undefined,
-		private readonly onPick: (color: string | null) => void,
-	) {
-		super(app);
-	}
-
-	override onOpen(): void {
-		this.titleEl.setText(this.title.replace(/…$/, ""));
-		buildColorPicker(this.contentEl, {
-			swatches: this.swatches,
-			current: this.current,
-			onPick: (color) => {
-				this.close();
-				this.onPick(color);
-			},
-		});
+		this.render(this.contentEl, () => this.close());
 	}
 
 	override onClose(): void {
