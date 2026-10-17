@@ -48,3 +48,7 @@ npm run build      # typecheck + production bundle
 
 To try it in a vault, copy or symlink `main.js`, `manifest.json`, and `styles.css` into
 `<vault>/.obsidian/plugins/dream-table/`, then enable **Dream Table** under Community plugins.
+
+## About
+
+This plugin was written 100% by [Claude Code](https://claude.com/claude-code): all code, tests, and documentation.
