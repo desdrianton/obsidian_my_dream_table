@@ -177,6 +177,8 @@ class DreamTableView extends MarkdownRenderChild {
 			onError: (error) => new Notice(`Dream Table: ${error instanceof Error ? error.message : String(error)}`),
 			onFocusChange: (focused) => this.setScopeActive(focused),
 			onInsertFiles: (files) => this.saveImages(files),
+			// The context menu and the dialogs it opens act on the selection.
+			keepsSelection: (target) => target.closest(".menu, .modal-container") !== null,
 		});
 		void this.editor.render();
 	}

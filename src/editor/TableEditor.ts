@@ -38,6 +38,11 @@ export interface TableEditorOptions {
 	 * it, image pastes and drops are left to the browser.
 	 */
 	onInsertFiles?: (files: File[]) => Promise<string[]>;
+	/**
+	 * Clicking outside the table clears the selection, except on elements
+	 * this returns true for, e.g. the host's menus and dialogs that act on it.
+	 */
+	keepsSelection?: (target: Element) => boolean;
 	initialState?: EditorState;
 }
 
@@ -116,6 +121,8 @@ export class TableEditor {
 		this.root.addEventListener("dragover", this.onDragOver);
 		this.root.addEventListener("drop", this.onDrop);
 		this.doc.addEventListener("mouseup", this.onMouseUp);
+		// Capture phase, so a click is seen even if the note editor stops it.
+		this.doc.addEventListener("mousedown", this.onDocumentMouseDown, true);
 		this.doc.addEventListener("mousemove", this.onDocumentMouseMove);
 		// Removing a focused element (on re-render) may not fire focusout, so
 		// also notice focus landing anywhere else in the document.
@@ -129,6 +136,7 @@ export class TableEditor {
 		}
 		this.renderToken++;
 		this.doc.removeEventListener("mouseup", this.onMouseUp);
+		this.doc.removeEventListener("mousedown", this.onDocumentMouseDown, true);
 		this.doc.removeEventListener("mousemove", this.onDocumentMouseMove);
 		this.doc.removeEventListener("focusin", this.onDocumentFocusIn);
 		this.root.remove();
@@ -236,26 +244,33 @@ export class TableEditor {
 		input.setSelectionRange(end, end);
 	}
 
-	/** Saves the open edit, then optionally moves the selection. */
-	async commitEdit(dRow = 0, dCol = 0): Promise<void> {
+	/**
+	 * Saves the open edit, then optionally moves the selection. With `stay`
+	 * false (the user clicked elsewhere) the table lets go of the selection
+	 * and focus instead.
+	 */
+	async commitEdit(dRow = 0, dCol = 0, stay = true): Promise<void> {
 		const editing = this.editing;
 		if (!editing) return;
 		this.editing = null;
 		const { cell, input } = editing;
 		const value = input.value;
+		if (!stay) this.selection = null;
 
 		if (value === this.model.getCell(cell.row, cell.col)) {
 			await this.render();
+			if (!stay) return;
 			this.focusRoot();
 			if (dRow !== 0 || dCol !== 0) this.move(dRow, dCol);
 			return;
 		}
 		await this.applyChange((model) => {
 			model.setCell(cell.row, cell.col, value);
+			if (!stay) return;
 			const next = stepFrom(model, cell, dRow, dCol);
 			return { top: next.row, left: next.col, bottom: next.row, right: next.col };
-		});
-		this.focusRoot();
+		}, stay);
+		if (stay) this.focusRoot();
 	}
 
 	cancelEdit(): void {
@@ -268,9 +283,10 @@ export class TableEditor {
 	/**
 	 * Runs a mutation on a copy of the model. The returned range (if any)
 	 * becomes the new selection. Rolls back if the mutation throws or
-	 * `onChange` reports that saving failed.
+	 * `onChange` reports that saving failed. `keepFocus` false lets the
+	 * re-rendered table leave focus where the user put it.
 	 */
-	async applyChange(mutate: (model: TableModel) => Range | void): Promise<boolean> {
+	async applyChange(mutate: (model: TableModel) => Range | void, keepFocus = true): Promise<boolean> {
 		const previous = this.model;
 		const previousSelection = this.selection;
 		const next = previous.clone();
@@ -291,8 +307,8 @@ export class TableEditor {
 		}
 		this.selection = this.clampSelection(this.selection);
 
-		// Changes come from interacting with this table, so it should keep focus.
-		const saved = this.options.onChange(next, { ...this.state, focused: true });
+		// Changes come from interacting with this table, so it should usually keep focus.
+		const saved = this.options.onChange(next, { ...this.state, focused: keepFocus });
 		await this.render();
 		if (await saved) return true;
 
@@ -341,6 +357,15 @@ export class TableEditor {
 		this.select(cell, evt.shiftKey);
 		this.dragging = true;
 		this.focusRoot();
+	};
+
+	/** A click anywhere else ends the selection (and saves an open edit). */
+	private readonly onDocumentMouseDown = (evt: MouseEvent) => {
+		const target = evt.target as Element | null;
+		if (!target || this.root.contains(target)) return;
+		if (this.options.keepsSelection?.(target)) return;
+		if (this.editing) void this.commitEdit(0, 0, false);
+		else if (this.selection) this.clearSelection();
 	};
 
 	private readonly onMouseOver = (evt: MouseEvent) => {

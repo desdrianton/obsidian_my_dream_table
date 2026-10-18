@@ -813,3 +813,44 @@ describe("collapse", () => {
 		expect(selected()).toBe("B1");
 	});
 });
+
+describe("clicking outside", () => {
+	it("clears the selection", async () => {
+		await mount(grid());
+		mouse(td("B2"), "mousedown");
+		expect(selected()).toBe("B2");
+		mouse(document.body, "mousedown");
+		expect(selected()).toBeNull();
+		expect(td("B2").classList.contains("is-selected")).toBe(false);
+	});
+
+	it("keeps the selection on elements the host claims, like its menus", async () => {
+		const menu = document.createElement("div");
+		menu.className = "menu";
+		document.body.appendChild(menu);
+		await mount(grid(), { keepsSelection: (el) => el.closest(".menu") !== null });
+		mouse(td("B2"), "mousedown");
+		mouse(menu, "mousedown");
+		expect(selected()).toBe("B2");
+	});
+
+	it("saves an open edit and lets go of the selection and focus", async () => {
+		await mount(grid());
+		editor.startEdit({ row: 0, col: 0 });
+		input().value = "changed";
+		mouse(document.body, "mousedown");
+		await flush();
+		expect(editor.currentModel.getCell(0, 0)).toBe("changed");
+		expect(selected()).toBeNull();
+		expect(onChange.mock.calls[0]![1]).toMatchObject({ selection: null, focused: false });
+		expect(editor.containsFocus).toBe(false);
+	});
+
+	it("stops listening once destroyed", async () => {
+		await mount(grid());
+		editor.select({ row: 1, col: 1 });
+		editor.destroy();
+		mouse(document.body, "mousedown");
+		expect(selected()).toBe("B2");
+	});
+});
