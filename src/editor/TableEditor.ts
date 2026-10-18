@@ -43,6 +43,13 @@ export interface TableEditorOptions {
 	 * this returns true for, e.g. the host's menus and dialogs that act on it.
 	 */
 	keepsSelection?: (target: Element) => boolean;
+	/**
+	 * Called when an arrow key moves past the table's edge: up from the top
+	 * row or left from the first cell ("before"), down from the bottom row or
+	 * right from the last cell ("after"). The host moves its cursor out of
+	 * the table and returns true, or returns false to stay in the table.
+	 */
+	onExit?: (side: "before" | "after") => boolean;
 	initialState?: EditorState;
 }
 
@@ -213,6 +220,31 @@ export class TableEditor {
 			return;
 		}
 		this.select(stepFrom(this.model, this.selection.focus, dRow, dCol), extend);
+	}
+
+	/**
+	 * Leaves the table if moving the focus cell by one step in that direction
+	 * would go past its edge (see `onExit`). Returns whether it left.
+	 */
+	private exitAt(dRow: number, dCol: number): boolean {
+		const focus = this.selection?.focus;
+		if (!focus || !this.options.onExit) return false;
+		const span = this.model.getMergeAt(focus.row, focus.col) ?? {
+			top: focus.row,
+			bottom: focus.row,
+			left: focus.col,
+			right: focus.col,
+		};
+		const lastRow = this.model.visibleRowCount - 1;
+		const lastCol = this.model.colCount - 1;
+		let side: "before" | "after" | null = null;
+		if (dRow < 0 && span.top === 0) side = "before";
+		else if (dRow > 0 && span.bottom >= lastRow) side = "after";
+		else if (dCol < 0 && rangeContainsCell(span, 0, 0)) side = "before";
+		else if (dCol > 0 && rangeContainsCell(span, lastRow, lastCol)) side = "after";
+		if (!side || !this.options.onExit(side)) return false;
+		this.clearSelection();
+		return true;
 	}
 
 	/** Replaces the cell's rendered content with a textarea holding its markdown. */
@@ -459,15 +491,19 @@ export class TableEditor {
 		const mod = evt.ctrlKey || evt.metaKey;
 		switch (evt.key) {
 			case "ArrowUp":
+				if (!evt.shiftKey && this.exitAt(-1, 0)) return true;
 				this.move(-1, 0, evt.shiftKey);
 				return true;
 			case "ArrowDown":
+				if (!evt.shiftKey && this.exitAt(1, 0)) return true;
 				this.move(1, 0, evt.shiftKey);
 				return true;
 			case "ArrowLeft":
+				if (!evt.shiftKey && this.exitAt(0, -1)) return true;
 				this.move(0, -1, evt.shiftKey);
 				return true;
 			case "ArrowRight":
+				if (!evt.shiftKey && this.exitAt(0, 1)) return true;
 				this.move(0, 1, evt.shiftKey);
 				return true;
 			case "Tab":

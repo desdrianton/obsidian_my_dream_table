@@ -854,3 +854,72 @@ describe("clicking outside", () => {
 		expect(selected()).toBe("B2");
 	});
 });
+
+describe("leaving with arrow keys", () => {
+	function mountWithExit(model: TableModel, result = true) {
+		const onExit = vi.fn((_side: "before" | "after") => result);
+		return mount(model, { onExit }).then(() => onExit);
+	}
+
+	it("leaves before from the top row and after from the bottom row", async () => {
+		const onExit = await mountWithExit(grid());
+		editor.select({ row: 0, col: 1 });
+		key(editor.root, "ArrowUp");
+		expect(onExit).toHaveBeenLastCalledWith("before");
+		expect(selected()).toBeNull();
+		editor.select({ row: 2, col: 1 });
+		key(editor.root, "ArrowDown");
+		expect(onExit).toHaveBeenLastCalledWith("after");
+	});
+
+	it("leaves sideways only from the first and last cell", async () => {
+		const onExit = await mountWithExit(grid());
+		editor.select({ row: 1, col: 0 });
+		key(editor.root, "ArrowLeft");
+		expect(onExit).not.toHaveBeenCalled();
+		expect(selected()).toBe("A2");
+		editor.select({ row: 0, col: 0 });
+		key(editor.root, "ArrowLeft");
+		expect(onExit).toHaveBeenLastCalledWith("before");
+		editor.select({ row: 2, col: 2 });
+		key(editor.root, "ArrowRight");
+		expect(onExit).toHaveBeenLastCalledWith("after");
+	});
+
+	it("moves inside the table otherwise, and with Shift", async () => {
+		const onExit = await mountWithExit(grid());
+		editor.select({ row: 1, col: 1 });
+		key(editor.root, "ArrowUp");
+		expect(selected()).toBe("B1");
+		key(editor.root, "ArrowUp", { shiftKey: true });
+		expect(onExit).not.toHaveBeenCalled();
+		expect(selected()).toBe("B1");
+	});
+
+	it("treats a merge on the edge as being on the edge", async () => {
+		const m = grid();
+		m.merge(r("B2:C3"));
+		const onExit = await mountWithExit(m);
+		editor.select({ row: 1, col: 1 });
+		key(editor.root, "ArrowRight");
+		expect(onExit).toHaveBeenLastCalledWith("after");
+	});
+
+	it("leaves after from the last header row while collapsed", async () => {
+		const m = grid();
+		m.setHeaderRows(1);
+		m.collapsed = true;
+		const onExit = await mountWithExit(m);
+		editor.select({ row: 0, col: 0 });
+		key(editor.root, "ArrowDown");
+		expect(onExit).toHaveBeenLastCalledWith("after");
+	});
+
+	it("stays when the host cannot move out", async () => {
+		const onExit = await mountWithExit(grid(), false);
+		editor.select({ row: 0, col: 0 });
+		key(editor.root, "ArrowUp");
+		expect(onExit).toHaveBeenCalled();
+		expect(selected()).toBe("A1");
+	});
+});

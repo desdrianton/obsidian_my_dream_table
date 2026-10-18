@@ -70,6 +70,17 @@ export default class DreamTablePlugin extends Plugin {
 	 * one, so the change lands in its undo history; otherwise edits the file.
 	 * Returns false if the block no longer matches `expectedBody`.
 	 */
+	/** The editor of `sourcePath` in Live Preview or source mode, if one is open. */
+	findSourceView(sourcePath: string): MarkdownView | undefined {
+		return this.app.workspace
+			.getLeavesOfType("markdown")
+			.map((leaf) => leaf.view)
+			.find(
+				(v): v is MarkdownView =>
+					v instanceof MarkdownView && v.file?.path === sourcePath && v.getMode() === "source",
+			);
+	}
+
 	async writeBlockBody(
 		sourcePath: string,
 		location: BlockLocation,
@@ -79,13 +90,7 @@ export default class DreamTablePlugin extends Plugin {
 		const file = this.app.vault.getAbstractFileByPath(sourcePath);
 		if (!(file instanceof TFile)) return false;
 
-		const view = this.app.workspace
-			.getLeavesOfType("markdown")
-			.map((leaf) => leaf.view)
-			.find(
-				(v): v is MarkdownView =>
-					v instanceof MarkdownView && v.file?.path === sourcePath && v.getMode() === "source",
-			);
+		const view = this.findSourceView(sourcePath);
 		if (view) {
 			const edit = planBodyEdit(view.editor.getValue().split("\n"), location, expectedBody, newBody);
 			if (!edit) return false;
@@ -179,6 +184,7 @@ class DreamTableView extends MarkdownRenderChild {
 			onInsertFiles: (files) => this.saveImages(files),
 			// The context menu and the dialogs it opens act on the selection.
 			keepsSelection: (target) => target.closest(".menu, .modal-container") !== null,
+			onExit: (side) => this.moveCursorOut(side),
 		});
 		void this.editor.render();
 	}
@@ -206,6 +212,35 @@ class DreamTableView extends MarkdownRenderChild {
 			embeds.push(toEmbed(app.fileManager.generateMarkdownLink(saved, this.ctx.sourcePath)));
 		}
 		return embeds;
+	}
+
+	/**
+	 * Puts the note's cursor at the end of the line above the block or the
+	 * start of the line below it, adding an empty line when the block is at
+	 * the very start or end of the note. Only possible while editing the note.
+	 */
+	private moveCursorOut(side: "before" | "after"): boolean {
+		const view = this.plugin.findSourceView(this.ctx.sourcePath);
+		if (!view || !this.location) return false;
+		const { editor } = view;
+		const { lineStart, lineEnd } = this.location;
+		if (lineEnd >= editor.lineCount()) return false;
+
+		if (side === "before") {
+			if (lineStart === 0) {
+				editor.replaceRange("\n", { line: 0, ch: 0 });
+				editor.setCursor({ line: 0, ch: 0 });
+			} else {
+				editor.setCursor({ line: lineStart - 1, ch: editor.getLine(lineStart - 1).length });
+			}
+		} else {
+			if (lineEnd === editor.lastLine()) {
+				editor.replaceRange("\n", { line: lineEnd, ch: editor.getLine(lineEnd).length });
+			}
+			editor.setCursor({ line: lineEnd + 1, ch: 0 });
+		}
+		editor.focus();
+		return true;
 	}
 
 	private currentScrollTop(): number | null {
