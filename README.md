@@ -37,6 +37,7 @@ styles:
   - `script`: `sub` / `sup` draws the whole cell as subscript or superscript. For part of the text, write `H<sub>2</sub>O` or `x<sup>2</sup>` in the cell.
   - `borderColor`, `borderWidth` (px, 0–20), `borderStyle` (`solid` / `dashed` / `dotted` / `double` / `none`): border on all sides of each cell, overriding the table border
   - `null` resets a property to the default
+- **Selecting cells**: click, drag, or Shift+click to select a range. Ctrl+click (Cmd+click on macOS) adds more cells or ranges (drag to add a range), and Ctrl+clicking a selected cell again deselects it. Formatting (bold, italic, alignment, colors, cell font, size, padding, line height, border, clear formatting/content) then applies to every selected cell; merging and inserting/deleting rows or columns need a single range.
 - **`widths`**: column widths in px, e.g. `[120, null, 80]`. `null` (or a missing entry) means automatic. Drag a column border in the table to set them; right-click → *Reset column widths* to go back to automatic.
 - **`padding`**: default cell padding in px (0–100) for the whole table. Right-click → *Table padding…* / *Cell padding…* to set it from the table.
 - **`lineHeight`**: default line height for every cell (0.5–5). Right-click → *Table line height…* / *Cell line height…* to set it from the table.

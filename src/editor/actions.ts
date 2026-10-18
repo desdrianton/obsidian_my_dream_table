@@ -15,30 +15,45 @@ export interface TableAction {
 	isEnabled?: (model: TableModel, range: Range) => boolean;
 	isChecked?: (model: TableModel, range: Range) => boolean;
 	run: (model: TableModel, range: Range) => Range | void;
+	/**
+	 * Runs the action on several ranges at once (a Ctrl/Cmd+click selection).
+	 * Actions without it are disabled while more than one range is selected.
+	 */
+	runAll?: (model: TableModel, ranges: readonly Range[]) => void;
+}
+
+/** An action that also works on multi-range selections; `run` is `runAll` on one range. */
+function multiRange(action: Omit<TableAction, "run" | "runAll"> & Required<Pick<TableAction, "runAll">>): TableAction {
+	return { ...action, run: (model, range) => action.runAll(model, [range]) };
 }
 
 const rowCount = (range: Range) => range.bottom - range.top + 1;
 const colCount = (range: Range) => range.right - range.left + 1;
 
-/** Toggling uses the top-left cell as the reference, like most editors. */
+/**
+ * Toggling uses the top-left cell of the first range as the reference, like
+ * most editors, so every range ends up the same.
+ */
 function toggle(key: "bold" | "italic") {
-	return (model: TableModel, range: Range) => {
-		const on = model.getStyle(range.top, range.left)[key] === true;
-		model.applyStyle(range, { [key]: on ? null : true });
+	return (model: TableModel, ranges: readonly Range[]) => {
+		const first = ranges[0]!;
+		const on = model.getStyle(first.top, first.left)[key] === true;
+		for (const range of ranges) model.applyStyle(range, { [key]: on ? null : true });
 	};
 }
 
 /** Subscript and superscript exclude each other; picking the active one turns it off. */
 function toggleScript(value: Script) {
-	return (model: TableModel, range: Range) => {
-		const on = model.getStyle(range.top, range.left).script === value;
-		model.applyStyle(range, { script: on ? null : value });
+	return (model: TableModel, ranges: readonly Range[]) => {
+		const first = ranges[0]!;
+		const on = model.getStyle(first.top, first.left).script === value;
+		for (const range of ranges) model.applyStyle(range, { script: on ? null : value });
 	};
 }
 
 function align(value: HorizontalAlign) {
-	return (model: TableModel, range: Range) => {
-		model.applyStyle(range, { align: value === "left" ? null : value });
+	return (model: TableModel, ranges: readonly Range[]) => {
+		for (const range of ranges) model.applyStyle(range, { align: value === "left" ? null : value });
 	};
 }
 
@@ -182,81 +197,95 @@ export const TABLE_ACTIONS: readonly TableAction[] = [
 			return collapseTo(model, range.top, range.left);
 		},
 	},
-	{
+	multiRange({
 		id: "clear-content",
 		title: "Clear content",
 		icon: "eraser",
 		section: "delete",
-		run: (model, range) => {
-			clearContent(model, range);
-			return range;
+		runAll: (model, ranges) => {
+			for (const range of ranges) clearContent(model, range);
 		},
-	},
-	{
+	}),
+	multiRange({
 		id: "bold",
 		title: "Bold",
 		icon: "bold",
 		section: "format",
 		isChecked: (model, range) => model.getStyle(range.top, range.left).bold === true,
-		run: toggle("bold"),
-	},
-	{
+		runAll: toggle("bold"),
+	}),
+	multiRange({
 		id: "italic",
 		title: "Italic",
 		icon: "italic",
 		section: "format",
 		isChecked: (model, range) => model.getStyle(range.top, range.left).italic === true,
-		run: toggle("italic"),
-	},
-	{
+		runAll: toggle("italic"),
+	}),
+	multiRange({
 		id: "subscript",
 		title: "Subscript",
 		icon: "subscript",
 		section: "format",
 		isChecked: (model, range) => model.getStyle(range.top, range.left).script === "sub",
-		run: toggleScript("sub"),
-	},
-	{
+		runAll: toggleScript("sub"),
+	}),
+	multiRange({
 		id: "superscript",
 		title: "Superscript",
 		icon: "superscript",
 		section: "format",
 		isChecked: (model, range) => model.getStyle(range.top, range.left).script === "sup",
-		run: toggleScript("sup"),
-	},
-	{
+		runAll: toggleScript("sup"),
+	}),
+	multiRange({
 		id: "align-left",
 		title: "Align left",
 		icon: "align-left",
 		section: "format",
 		isChecked: alignChecked("left"),
-		run: align("left"),
-	},
-	{
+		runAll: align("left"),
+	}),
+	multiRange({
 		id: "align-center",
 		title: "Align center",
 		icon: "align-center",
 		section: "format",
 		isChecked: alignChecked("center"),
-		run: align("center"),
-	},
-	{
+		runAll: align("center"),
+	}),
+	multiRange({
 		id: "align-right",
 		title: "Align right",
 		icon: "align-right",
 		section: "format",
 		isChecked: alignChecked("right"),
-		run: align("right"),
-	},
-	{
+		runAll: align("right"),
+	}),
+	multiRange({
 		id: "clear-formatting",
 		title: "Clear formatting",
 		icon: "remove-formatting",
 		section: "format",
 		isEnabled: (model, range) => model.styles.some((rule) => rangesIntersect(rule.range, range)),
-		run: (model, range) => model.clearStyle(range),
-	},
+		runAll: (model, ranges) => {
+			for (const range of ranges) model.clearStyle(range);
+		},
+	}),
 ];
+
+/** Whether the action can run on the selected ranges (the first being the active one). */
+export function isActionEnabled(action: TableAction, model: TableModel, ranges: readonly Range[]): boolean {
+	if (ranges.length === 0 || (ranges.length > 1 && !action.runAll)) return false;
+	if (!action.isEnabled) return true;
+	return ranges.some((range) => action.isEnabled!(model, range));
+}
+
+/** Runs the action on the selected ranges; see `TableAction.run` for the result. */
+export function runTableAction(action: TableAction, model: TableModel, ranges: readonly Range[]): Range | void {
+	if (ranges.length === 1) return action.run(model, ranges[0]!);
+	action.runAll!(model, ranges);
+}
 
 /** Empties every writable cell in the range (merge anchors and plain cells). */
 export function clearContent(model: TableModel, range: Range): void {

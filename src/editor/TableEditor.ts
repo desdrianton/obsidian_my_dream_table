@@ -1,11 +1,11 @@
 import { normalizeRange } from "../model/address";
-import { rangeContainsCell } from "../model/range";
+import { rangeContainsCell, rangesEqual } from "../model/range";
 import type { TableModel } from "../model/TableModel";
 import type { CellRef, Range } from "../model/types";
 import { appendToCell, imageFilesFrom } from "../images";
 import { setTaskChecked } from "../render/cellMarkdown";
 import { applyColumnWidths, renderTable, type RenderMarkdown } from "../render/renderTable";
-import { clearContent, TABLE_ACTIONS } from "./actions";
+import { clearContent, isActionEnabled, runTableAction, TABLE_ACTIONS } from "./actions";
 import {
 	applyToTextarea,
 	indentLines,
@@ -19,6 +19,8 @@ import { hitColumnEdge, measureColumnWidths, resizedWidths, startingWidths } fro
 export interface Selection {
 	anchor: CellRef;
 	focus: CellRef;
+	/** Ranges added earlier with Ctrl/Cmd+click, besides the active anchor–focus range. */
+	extra?: Range[];
 }
 
 /** What survives a re-render (e.g. after the note is rewritten). */
@@ -32,7 +34,8 @@ export interface TableEditorOptions {
 	renderMarkdown: RenderMarkdown;
 	/** Persists a changed model. Resolve false to roll the change back. */
 	onChange: (model: TableModel, state: EditorState) => Promise<boolean>;
-	onContextMenu?: (evt: MouseEvent, range: Range) => void;
+	/** `ranges` are the selected ranges, the active one first (see `getSelectedRanges`). */
+	onContextMenu?: (evt: MouseEvent, ranges: Range[]) => void;
 	onError?: (error: unknown) => void;
 	/**
 	 * Called when keyboard focus enters or leaves the table (including the
@@ -120,7 +123,7 @@ export class TableEditor {
 		this.focusAfterRender = options.initialState?.focused === true;
 		const initial = options.initialState?.selection;
 		if (initial && this.inBounds(initial.anchor) && this.inBounds(initial.focus)) {
-			this.selection = { anchor: { ...initial.anchor }, focus: { ...initial.focus } };
+			this.selection = this.clampSelection(copySelection(initial));
 		}
 
 		this.root.addEventListener("mousedown", this.onMouseDown);
@@ -163,10 +166,7 @@ export class TableEditor {
 	}
 
 	get state(): EditorState {
-		const selection = this.selection && {
-			anchor: { ...this.selection.anchor },
-			focus: { ...this.selection.focus },
-		};
+		const selection = this.selection && copySelection(this.selection);
 		return { selection, focused: this.root.contains(this.doc.activeElement) };
 	}
 
@@ -178,6 +178,17 @@ export class TableEditor {
 	getSelectedRange(): Range | null {
 		if (!this.selection) return null;
 		return this.model.expandToMerges(normalizeRange(this.selection.anchor, this.selection.focus));
+	}
+
+	/**
+	 * Every selected range, grown to whole merges: the active one first, then
+	 * those added with Ctrl/Cmd+click, oldest first.
+	 */
+	getSelectedRanges(): Range[] {
+		const active = this.getSelectedRange();
+		if (!active) return [];
+		const extra = (this.selection?.extra ?? []).map((range) => this.model.expandToMerges(range));
+		return [active, ...extra];
 	}
 
 	async render(): Promise<void> {
@@ -202,13 +213,44 @@ export class TableEditor {
 		});
 	}
 
+	/** Selects one cell, or with `extend` moves the active range's focus (keeping added ranges). */
 	select(cell: CellRef, extend = false): void {
 		const target = snapToAnchor(this.model, cell);
 		this.selection =
 			extend && this.selection
-				? { anchor: this.selection.anchor, focus: target }
+				? { ...this.selection, anchor: this.selection.anchor, focus: target }
 				: { anchor: target, focus: target };
 		this.paintSelection();
+	}
+
+	/**
+	 * Ctrl/Cmd+click: starts a new active range at `cell` and keeps the
+	 * current ones. Clicking a cell that is selected on its own deselects it.
+	 * Returns whether the cell ends up selected.
+	 */
+	toggleCell(cell: CellRef): boolean {
+		const target = snapToAnchor(this.model, cell);
+		const ranges = this.getSelectedRanges();
+		if (ranges.length === 0) {
+			this.select(target);
+			return true;
+		}
+		const own = this.model.expandToMerges({ top: target.row, left: target.col, bottom: target.row, right: target.col });
+		const index = ranges.findIndex((range) => rangesEqual(range, own));
+		if (index > 0) {
+			const selection = this.selection!;
+			const extra = selection.extra!.filter((_, i) => i !== index - 1);
+			this.selection = { anchor: selection.anchor, focus: selection.focus };
+			if (extra.length > 0) this.selection.extra = extra;
+		} else if (index === 0) {
+			// The most recently added range becomes the active one.
+			const extra = ranges.slice(1);
+			this.selection = extra.length > 0 ? this.selectionOf([extra[extra.length - 1]!, ...extra.slice(0, -1)]) : null;
+		} else {
+			this.selection = { anchor: target, focus: target, extra: [...ranges.slice(1), ranges[0]!] };
+		}
+		this.paintSelection();
+		return index < 0;
 	}
 
 	selectAll(): void {
@@ -339,15 +381,16 @@ export class TableEditor {
 
 	/**
 	 * Runs a mutation on a copy of the model. The returned range (if any)
-	 * becomes the new selection. Rolls back if the mutation throws or
+	 * becomes the new selection; an array of ranges selects all of them, the
+	 * first being the active one. Rolls back if the mutation throws or
 	 * `onChange` reports that saving failed. `keepFocus` false lets the
 	 * re-rendered table leave focus where the user put it.
 	 */
-	async applyChange(mutate: (model: TableModel) => Range | void, keepFocus = true): Promise<boolean> {
+	async applyChange(mutate: (model: TableModel) => Range | Range[] | void, keepFocus = true): Promise<boolean> {
 		const previous = this.model;
 		const previousSelection = this.selection;
 		const next = previous.clone();
-		let range: Range | void;
+		let range: Range | Range[] | void;
 		try {
 			range = mutate(next);
 		} catch (error) {
@@ -356,11 +399,10 @@ export class TableEditor {
 		}
 
 		this.model = next;
-		if (range) {
-			this.selection = {
-				anchor: snapToAnchor(next, { row: range.top, col: range.left }),
-				focus: snapToAnchor(next, { row: range.bottom, col: range.right }),
-			};
+		if (Array.isArray(range)) {
+			if (range.length > 0) this.selection = this.selectionOf(range);
+		} else if (range) {
+			this.selection = this.selectionOf([range]);
 		}
 		this.selection = this.clampSelection(this.selection);
 
@@ -375,13 +417,12 @@ export class TableEditor {
 		return false;
 	}
 
-	/** Runs one of TABLE_ACTIONS on the current selection. */
+	/** Runs one of TABLE_ACTIONS on the current selection (all of its ranges). */
 	runAction(id: string): Promise<boolean> {
 		const action = TABLE_ACTIONS.find((a) => a.id === id);
-		const range = this.getSelectedRange();
-		if (!action || !range) return Promise.resolve(false);
-		if (action.isEnabled && !action.isEnabled(this.model, range)) return Promise.resolve(false);
-		return this.applyChange((model) => action.run(model, range));
+		const ranges = this.getSelectedRanges();
+		if (!action || !isActionEnabled(action, this.model, ranges)) return Promise.resolve(false);
+		return this.applyChange((model) => runTableAction(action, model, ranges));
 	}
 
 	// ------------------------------------------------------------- events
@@ -411,8 +452,12 @@ export class TableEditor {
 		evt.preventDefault();
 		evt.stopPropagation();
 		if (this.editing) void this.commitEdit();
-		this.select(cell, evt.shiftKey);
-		this.dragging = true;
+		// Dragging after Ctrl/Cmd+click grows the new range, unless the click deselected the cell.
+		if ((evt.ctrlKey || evt.metaKey) && !evt.shiftKey) this.dragging = this.toggleCell(cell);
+		else {
+			this.select(cell, evt.shiftKey);
+			this.dragging = true;
+		}
 		this.focusRoot();
 	};
 
@@ -518,9 +563,9 @@ export class TableEditor {
 		if (!cell || this.editingTarget(evt) || !this.options.onContextMenu) return;
 		evt.preventDefault();
 		evt.stopPropagation();
-		const range = this.getSelectedRange();
-		if (!range || !rangeContainsCell(range, cell.row, cell.col)) this.select(cell);
-		this.options.onContextMenu(evt, this.getSelectedRange()!);
+		const ranges = this.getSelectedRanges();
+		if (!ranges.some((range) => rangeContainsCell(range, cell.row, cell.col))) this.select(cell);
+		this.options.onContextMenu(evt, this.getSelectedRanges());
 	};
 
 	private readonly onKeyDown = (evt: KeyboardEvent) => {
@@ -565,11 +610,11 @@ export class TableEditor {
 				return true;
 			case "Delete":
 			case "Backspace": {
-				const range = this.getSelectedRange();
-				if (!range) return false;
+				const ranges = this.getSelectedRanges();
+				if (ranges.length === 0) return false;
 				void this.applyChange((model) => {
-					clearContent(model, range);
-					return range;
+					for (const range of ranges) clearContent(model, range);
+					return ranges;
 				});
 				return true;
 			}
@@ -745,12 +790,12 @@ export class TableEditor {
 	// ------------------------------------------------------------ helpers
 
 	private paintSelection(): void {
-		const range = this.getSelectedRange();
+		const ranges = this.getSelectedRanges();
 		const focus = this.selection?.focus;
 		for (const td of Array.from(this.root.querySelectorAll<HTMLTableCellElement>("td[data-row]"))) {
 			const row = Number(td.dataset.row);
 			const col = Number(td.dataset.col);
-			td.classList.toggle("is-selected", range !== null && rangeContainsCell(range, row, col));
+			td.classList.toggle("is-selected", ranges.some((range) => rangeContainsCell(range, row, col)));
 			td.classList.toggle("is-focus", focus !== undefined && focus.row === row && focus.col === col);
 		}
 	}
@@ -787,8 +832,37 @@ export class TableEditor {
 				row: clamp(cell.row, 0, this.model.visibleRowCount - 1),
 				col: clamp(cell.col, 0, this.model.colCount - 1),
 			});
-		return { anchor: fix(selection.anchor), focus: fix(selection.focus) };
+		const lastRow = this.model.visibleRowCount - 1;
+		const lastCol = this.model.colCount - 1;
+		const extra = (selection.extra ?? [])
+			.filter((range) => range.top <= lastRow && range.left <= lastCol)
+			.map((range) => ({
+				top: range.top,
+				left: range.left,
+				bottom: Math.min(range.bottom, lastRow),
+				right: Math.min(range.right, lastCol),
+			}));
+		const fixed: Selection = { anchor: fix(selection.anchor), focus: fix(selection.focus) };
+		if (extra.length > 0) fixed.extra = extra;
+		return fixed;
 	}
+
+	/** A selection of `ranges`, the first one active (anchor at its top-left). */
+	private selectionOf(ranges: Range[]): Selection {
+		const [first, ...extra] = ranges;
+		const selection: Selection = {
+			anchor: snapToAnchor(this.model, { row: first!.top, col: first!.left }),
+			focus: snapToAnchor(this.model, { row: first!.bottom, col: first!.right }),
+		};
+		if (extra.length > 0) selection.extra = extra.map((range) => ({ ...range }));
+		return selection;
+	}
+}
+
+function copySelection(selection: Selection): Selection {
+	const copy: Selection = { anchor: { ...selection.anchor }, focus: { ...selection.focus } };
+	if (selection.extra?.length) copy.extra = selection.extra.map((range) => ({ ...range }));
+	return copy;
 }
 
 export const SHORTCUT_KEYS = ["b", "i", "k", "a"] as const;

@@ -15,6 +15,7 @@ import {
 } from "obsidian";
 import { CODE_BLOCK_LANGUAGE, createStarterTable, parseCodeBlock, toCodeBlock } from "./codeblock";
 import {
+	isActionEnabled,
 	setBorder,
 	setColor,
 	setFontFamily,
@@ -224,7 +225,7 @@ class DreamTableView extends MarkdownRenderChild {
 			renderMarkdown,
 			initialState: this.plugin.takeState(this.stateKey()),
 			onChange: (model, state) => this.save(model, state),
-			onContextMenu: (evt, range) => this.showMenu(evt, range),
+			onContextMenu: (evt, ranges) => this.showMenu(evt, ranges),
 			onError: (error) => new Notice(`Dream Table: ${error instanceof Error ? error.message : String(error)}`),
 			onFocusChange: (focused) => this.setScopeActive(focused),
 			onInsertFiles: (files) => this.saveImages(files),
@@ -308,7 +309,7 @@ class DreamTableView extends MarkdownRenderChild {
 		if (scroller && top !== null) holdScrollPosition(scroller, top);
 	}
 
-	private applyKeepingScroll(top: number | null, mutate: (model: TableModel) => Range | void): Promise<boolean> {
+	private applyKeepingScroll(top: number | null, mutate: (model: TableModel) => Range | Range[] | void): Promise<boolean> {
 		this.holdScroll(top);
 		return this.editor ? this.editor.applyChange(mutate) : Promise.resolve(false);
 	}
@@ -346,9 +347,11 @@ class DreamTableView extends MarkdownRenderChild {
 		return true;
 	}
 
-	private showMenu(evt: MouseEvent, range: Range): void {
+	/** `ranges` are the selected ranges; cell settings apply to all, and show the first one's. */
+	private showMenu(evt: MouseEvent, ranges: Range[]): void {
 		const editor = this.editor;
-		if (!editor) return;
+		const range = ranges[0];
+		if (!editor || !range) return;
 		const model = editor.currentModel;
 		// Captured now: closing the menu or a dialog can refocus the note
 		// editor, which scrolls to its cursor before the change is saved.
@@ -363,7 +366,7 @@ class DreamTableView extends MarkdownRenderChild {
 				item
 					.setTitle(action.title)
 					.setIcon(action.icon)
-					.setDisabled(action.isEnabled ? !action.isEnabled(model, range) : false)
+					.setDisabled(!isActionEnabled(action, model, ranges))
 					.onClick(() => {
 						this.holdScroll(scrollTop);
 						void editor.runAction(action.id);
@@ -398,7 +401,12 @@ class DreamTableView extends MarkdownRenderChild {
 		const apply = (mutate: (m: TableModel) => void) =>
 			void this.applyKeepingScroll(scrollTop, (m) => {
 				mutate(m);
-				return range;
+				return ranges;
+			});
+		/** Like `apply`, running `mutate` on each selected range. */
+		const applyEach = (mutate: (m: TableModel, r: Range) => void) =>
+			apply((m) => {
+				for (const r of ranges) mutate(m, r);
 			});
 
 		menu.addSeparator();
@@ -409,7 +417,7 @@ class DreamTableView extends MarkdownRenderChild {
 					current: style[key],
 					onPick: (color) => {
 						close();
-						apply((m) => setColor(m, range, key, color));
+						applyEach((m, r) => setColor(m, r, key, color));
 					},
 				}),
 			);
@@ -424,7 +432,7 @@ class DreamTableView extends MarkdownRenderChild {
 				resetLabel: "Use table font",
 				onPick: (fontFamily) => {
 					close();
-					apply((m) => setFontFamily(m, range, fontFamily));
+					applyEach((m, r) => setFontFamily(m, r, fontFamily));
 				},
 			}),
 		);
@@ -434,7 +442,7 @@ class DreamTableView extends MarkdownRenderChild {
 				resetLabel: "Use table font size",
 				onPick: (fontSize) => {
 					close();
-					apply((m) => setFontSize(m, range, fontSize));
+					applyEach((m, r) => setFontSize(m, r, fontSize));
 				},
 			}),
 		);
@@ -444,7 +452,7 @@ class DreamTableView extends MarkdownRenderChild {
 				resetLabel: "Use table padding",
 				onPick: (padding) => {
 					close();
-					apply((m) => setPadding(m, range, padding));
+					applyEach((m, r) => setPadding(m, r, padding));
 				},
 			}),
 		);
@@ -454,7 +462,7 @@ class DreamTableView extends MarkdownRenderChild {
 				resetLabel: "Use table line height",
 				onPick: (lineHeight) => {
 					close();
-					apply((m) => setLineHeight(m, range, lineHeight));
+					applyEach((m, r) => setLineHeight(m, r, lineHeight));
 				},
 			}),
 		);
@@ -468,7 +476,7 @@ class DreamTableView extends MarkdownRenderChild {
 				resetLabel: "Use table border",
 				onApply: (choice) => {
 					close();
-					apply((m) => setBorder(m, range, choice));
+					applyEach((m, r) => setBorder(m, r, choice));
 				},
 			}),
 		);

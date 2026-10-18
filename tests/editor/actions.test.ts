@@ -3,6 +3,8 @@ import { formatRange, parseRange } from "../../src/model/address";
 import { TableModel } from "../../src/model/TableModel";
 import {
 	clearContent,
+	isActionEnabled,
+	runTableAction,
 	setBorder,
 	setColor,
 	setFontFamily,
@@ -176,6 +178,31 @@ describe("formatting", () => {
 		expect(enabled("clear-formatting", m, "A1:C3")).toBe(true);
 		run("clear-formatting", m, "A1:C3");
 		expect(m.styles).toEqual([]);
+	});
+
+	it("runs format actions on several ranges, toggling them all alike", () => {
+		const m = grid();
+		run("bold", m, "C3");
+		const ranges = [r("A1"), r("C3")];
+		runTableAction(action("bold"), m, ranges);
+		expect(m.getStyle(0, 0).bold).toBe(true);
+		expect(m.getStyle(2, 2).bold).toBe(true);
+		runTableAction(action("bold"), m, ranges);
+		expect(m.getStyle(0, 0).bold).toBeUndefined();
+		expect(m.getStyle(2, 2).bold).toBeUndefined();
+	});
+
+	it("enables only multi-range actions for several ranges", () => {
+		const m = grid();
+		const ranges = [r("A1"), r("C3")];
+		expect(isActionEnabled(action("align-center"), m, ranges)).toBe(true);
+		expect(isActionEnabled(action("clear-content"), m, ranges)).toBe(true);
+		expect(isActionEnabled(action("merge"), m, ranges)).toBe(false);
+		expect(isActionEnabled(action("delete-rows"), m, ranges)).toBe(false);
+		expect(isActionEnabled(action("clear-formatting"), m, ranges)).toBe(false);
+		run("italic", m, "C3");
+		expect(isActionEnabled(action("clear-formatting"), m, ranges)).toBe(true);
+		expect(isActionEnabled(action("bold"), m, [])).toBe(false);
 	});
 
 	it("sets and removes cell borders", () => {

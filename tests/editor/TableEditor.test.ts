@@ -172,6 +172,107 @@ describe("selection", () => {
 	});
 });
 
+describe("multiple ranges (Ctrl/Cmd+click)", () => {
+	function ranges(): string[] {
+		return editor.getSelectedRanges().map(formatRange);
+	}
+
+	it("adds cells to the selection, the newest one active", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(td("C3"), "mousedown", { ctrlKey: true });
+		mouse(td("B2"), "mousedown", { metaKey: true });
+		expect(ranges()).toEqual(["B2", "A1", "C3"]);
+		expect(td("A1").classList.contains("is-selected")).toBe(true);
+		expect(td("C3").classList.contains("is-selected")).toBe(true);
+		expect(td("A2").classList.contains("is-selected")).toBe(false);
+		expect(td("B2").classList.contains("is-focus")).toBe(true);
+	});
+
+	it("grows the new range by dragging and keeps the others", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(td("B2"), "mousedown", { ctrlKey: true });
+		mouse(td("C3"), "mouseover");
+		mouse(document.body, "mouseup");
+		expect(ranges()).toEqual(["B2:C3", "A1"]);
+	});
+
+	it("deselects a cell clicked again", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(td("B2"), "mousedown", { ctrlKey: true });
+		mouse(td("C3"), "mousedown", { ctrlKey: true });
+		mouse(td("B2"), "mousedown", { ctrlKey: true });
+		expect(ranges()).toEqual(["C3", "A1"]);
+		mouse(td("C3"), "mousedown", { ctrlKey: true });
+		expect(ranges()).toEqual(["A1"]);
+		mouse(td("A1"), "mousedown", { ctrlKey: true });
+		expect(ranges()).toEqual([]);
+	});
+
+	it("is replaced by a plain click or arrow key", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(td("C3"), "mousedown", { ctrlKey: true });
+		key(editor.root, "ArrowLeft");
+		expect(ranges()).toEqual(["B3"]);
+		mouse(td("C1"), "mousedown", { ctrlKey: true });
+		mouse(td("A2"), "mousedown");
+		expect(ranges()).toEqual(["A2"]);
+	});
+
+	it("applies formatting to every range and keeps them selected", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(td("C3"), "mousedown", { ctrlKey: true });
+		expect(await editor.runAction("bold")).toBe(true);
+		const model = editor.currentModel;
+		expect(model.getStyle(0, 0).bold).toBe(true);
+		expect(model.getStyle(2, 2).bold).toBe(true);
+		expect(model.getStyle(1, 1).bold).toBeUndefined();
+		expect(ranges()).toEqual(["C3", "A1"]);
+		expect(onChange.mock.calls[0]![1].selection?.extra).toEqual([r("A1")]);
+	});
+
+	it("refuses structural actions", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(td("C3"), "mousedown", { ctrlKey: true });
+		expect(await editor.runAction("delete-rows")).toBe(false);
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it("clears every range with Delete", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(td("C3"), "mousedown", { ctrlKey: true });
+		key(editor.root, "Delete");
+		await flush();
+		const model = editor.currentModel;
+		expect([model.getCell(0, 0), model.getCell(2, 2), model.getCell(1, 1)]).toEqual(["", "", "B2"]);
+		expect(ranges()).toEqual(["C3", "A1"]);
+	});
+
+	it("passes every range to the context menu", async () => {
+		const onContextMenu = vi.fn();
+		await mount(grid(), { onContextMenu });
+		mouse(td("A1"), "mousedown");
+		mouse(td("C3"), "mousedown", { ctrlKey: true });
+		mouse(td("A1"), "contextmenu");
+		expect(onContextMenu.mock.calls[0]![1].map(formatRange)).toEqual(["C3", "A1"]);
+	});
+
+	it("restores added ranges from an initial state", async () => {
+		await mount(grid(), {
+			initialState: {
+				selection: { anchor: { row: 2, col: 2 }, focus: { row: 2, col: 2 }, extra: [r("A1:B1"), r("A9")] },
+			},
+		});
+		expect(ranges()).toEqual(["C3", "A1:B1"]);
+	});
+});
+
 describe("keyboard navigation", () => {
 	it("moves with arrows and extends with shift", async () => {
 		await mount(grid());
@@ -461,7 +562,7 @@ describe("context menu", () => {
 		const evt = mouse(td("C3"), "contextmenu");
 		expect(evt.defaultPrevented).toBe(true);
 		expect(selected()).toBe("C3");
-		expect(formatRange(onContextMenu.mock.calls[0]![1])).toBe("C3");
+		expect(formatRange(onContextMenu.mock.calls[0]![1][0])).toBe("C3");
 	});
 
 	it("keeps a selection that contains the clicked cell", async () => {
@@ -470,7 +571,7 @@ describe("context menu", () => {
 		mouse(td("A1"), "mousedown");
 		mouse(td("B2"), "mousedown", { shiftKey: true });
 		mouse(td("B1"), "contextmenu");
-		expect(formatRange(onContextMenu.mock.calls[0]![1])).toBe("A1:B2");
+		expect(formatRange(onContextMenu.mock.calls[0]![1][0])).toBe("A1:B2");
 	});
 
 	it("leaves the native menu alone without a handler", async () => {
