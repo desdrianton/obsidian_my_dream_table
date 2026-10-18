@@ -30,6 +30,8 @@ export interface EditorState {
 	focused?: boolean;
 	/** How far the table's own box was scrolled (wide tables, frozen rows). */
 	scroll?: { top: number; left: number };
+	/** A cell edit in progress: its unsaved text and the textarea's selection. */
+	editing?: { cell: CellRef; text: string; start: number; end: number };
 }
 
 export interface TableEditorOptions {
@@ -66,6 +68,12 @@ export interface TableEditorOptions {
 	initialState?: EditorState;
 }
 
+function sameAnchor(model: TableModel, a: CellRef, b: CellRef): boolean {
+	const x = snapToAnchor(model, a);
+	const y = snapToAnchor(model, b);
+	return x.row === y.row && x.col === y.col;
+}
+
 /** Top-left cell of the merge containing (row, col), or the cell itself. */
 export function snapToAnchor(model: TableModel, cell: CellRef): CellRef {
 	const merge = model.getMergeAt(cell.row, cell.col);
@@ -94,8 +102,9 @@ export function stepFrom(model: TableModel, from: CellRef, dRow: number, dCol: n
 }
 
 /**
- * Interactive table: click/drag/shift-click to select, double-click, Enter,
- * or typing to edit a cell, keyboard navigation, and context-menu actions.
+ * Interactive table with a single mode: the selected cell is always open
+ * for editing, and arrow keys at the edge of its text move to the next
+ * cell. Dragging, Shift+click and Ctrl/Cmd+click select several cells, keyboard navigation, and context-menu actions.
  * Every change produces a new model passed to `onChange`.
  */
 export class TableEditor {
@@ -104,6 +113,12 @@ export class TableEditor {
 	private selection: Selection | null = null;
 	private editing: { cell: CellRef; input: HTMLTextAreaElement } | null = null;
 	private dragging = false;
+	/** The cell a plain click went down on; releasing it there opens the cell. */
+	private clickedCell: { cell: CellRef; committed: Promise<void> } | null = null;
+	/** An edit to reopen once the table is first rendered (see EditorState.editing). */
+	private restoreEdit: EditorState["editing"] | null;
+	/** The next cell opened by `takeFocus` puts the caret at its start (moving right into it). */
+	private caretAtStart = false;
 	private resizing: { col: number; startX: number; start: number[]; widths: number[] } | null = null;
 	private renderToken = 0;
 	private hasFocus = false;
@@ -125,6 +140,7 @@ export class TableEditor {
 
 		this.focusAfterRender = options.initialState?.focused === true;
 		this.scrollAfterRender = options.initialState?.scroll ?? null;
+		this.restoreEdit = options.initialState?.editing ?? null;
 		const initial = options.initialState?.selection;
 		if (initial && this.inBounds(initial.anchor) && this.inBounds(initial.focus)) {
 			this.selection = this.clampSelection(copySelection(initial));
@@ -153,6 +169,8 @@ export class TableEditor {
 	}
 
 	destroy(): void {
+		// Removing the textarea may blur it; that must not save from a dead table.
+		this.editing = null;
 		if (this.hasFocus) {
 			this.hasFocus = false;
 			this.options.onFocusChange?.(false);
@@ -174,7 +192,16 @@ export class TableEditor {
 		const state: EditorState = { selection, focused: this.root.contains(this.doc.activeElement) };
 		const scroll = this.scrollPosition();
 		if (scroll) state.scroll = scroll;
+		if (this.editing) {
+			const { cell, input } = this.editing;
+			state.editing = { cell, text: input.value, start: input.selectionStart, end: input.selectionEnd };
+		}
 		return state;
+	}
+
+	/** Closes the open edit without saving or re-rendering (it moved to a re-created table). */
+	dropEdit(): void {
+		this.editing = null;
 	}
 
 	private get wrapper(): HTMLElement | null {
@@ -208,7 +235,8 @@ export class TableEditor {
 		return [active, ...extra];
 	}
 
-	async render(): Promise<void> {
+	/** Re-renders the table; `reopen` opens the selected cell for editing afterwards. */
+	async render(reopen = false): Promise<void> {
 		const token = ++this.renderToken;
 		this.editing = null;
 		const scroll = this.scrollPosition() ?? this.scrollAfterRender;
@@ -222,7 +250,15 @@ export class TableEditor {
 			wrapper.scrollLeft = scroll.left;
 		}
 		this.paintSelection();
-		if (this.focusAfterRender) {
+		const restore = this.restoreEdit;
+		this.restoreEdit = null;
+		if (restore && this.inBounds(restore.cell)) {
+			this.focusAfterRender = false;
+			this.startEdit(restore.cell, restore.text, [restore.start, restore.end]);
+		} else if (reopen) {
+			this.focusAfterRender = false;
+			this.takeFocus();
+		} else if (this.focusAfterRender) {
 			this.focusAfterRender = false;
 			this.focusRoot();
 		}
@@ -259,7 +295,7 @@ export class TableEditor {
 			this.select(target);
 			return true;
 		}
-		const own = this.model.expandToMerges({ top: target.row, left: target.col, bottom: target.row, right: target.col });
+		const own = this.cellRange(target);
 		const index = ranges.findIndex((range) => rangesEqual(range, own));
 		if (index > 0) {
 			const selection = this.selection!;
@@ -300,7 +336,8 @@ export class TableEditor {
 				? { row: 0, col: 0 }
 				: { row: this.model.visibleRowCount - 1, col: this.model.colCount - 1 },
 		);
-		this.focusRoot();
+		this.caretAtStart = side === "before";
+		this.takeFocus();
 		return true;
 	}
 
@@ -318,8 +355,16 @@ export class TableEditor {
 	 * would go past its edge (see `onExit`). Returns whether it left.
 	 */
 	private exitAt(dRow: number, dCol: number): boolean {
+		const side = this.edgeSide(dRow, dCol);
+		if (!side || !this.options.onExit?.(side)) return false;
+		this.clearSelection();
+		return true;
+	}
+
+	/** Which way one step from the focus cell leaves the table, if it does. */
+	private edgeSide(dRow: number, dCol: number): "before" | "after" | null {
 		const focus = this.selection?.focus;
-		if (!focus || !this.options.onExit) return false;
+		if (!focus) return null;
 		const span = this.model.getMergeAt(focus.row, focus.col) ?? {
 			top: focus.row,
 			bottom: focus.row,
@@ -333,13 +378,14 @@ export class TableEditor {
 		else if (dRow > 0 && span.bottom >= lastRow) side = "after";
 		else if (dCol < 0 && rangeContainsCell(span, 0, 0)) side = "before";
 		else if (dCol > 0 && rangeContainsCell(span, lastRow, lastCol)) side = "after";
-		if (!side || !this.options.onExit(side)) return false;
-		this.clearSelection();
-		return true;
+		return side;
 	}
 
-	/** Replaces the cell's rendered content with a textarea holding its markdown. */
-	startEdit(cell?: CellRef, initialText?: string): void {
+	/**
+	 * Replaces the cell's rendered content with a textarea holding its
+	 * markdown, the caret at the end unless `caret` says otherwise.
+	 */
+	startEdit(cell?: CellRef, initialText?: string, caret?: [number, number]): void {
 		const start = cell ?? this.selection?.focus;
 		if (!start || !this.inBounds(start)) return;
 		if (this.editing) this.cancelEdit();
@@ -357,22 +403,24 @@ export class TableEditor {
 		input.addEventListener("input", () => {
 			input.rows = Math.max(1, input.value.split("\n").length);
 		});
-		input.addEventListener("blur", () => void this.commitEdit());
+		// Focus went elsewhere (another app, the note), so do not take it back.
+		input.addEventListener("blur", () => void this.commitEdit(0, 0, true, false));
 
 		td.replaceChildren(input);
 		td.classList.add("is-editing");
 		this.editing = { cell: target, input };
 		input.focus();
 		const end = input.value.length;
-		input.setSelectionRange(end, end);
+		input.setSelectionRange(...(caret ?? [end, end]));
 	}
 
 	/**
-	 * Saves the open edit, then optionally moves the selection. With `stay`
+	 * Saves the open edit and selects the cell one step away (or the same
+	 * one), opening it for editing unless `reopen` is false. With `stay`
 	 * false (the user clicked elsewhere) the table lets go of the selection
 	 * and focus instead.
 	 */
-	async commitEdit(dRow = 0, dCol = 0, stay = true): Promise<void> {
+	async commitEdit(dRow = 0, dCol = 0, stay = true, reopen = stay): Promise<void> {
 		const editing = this.editing;
 		if (!editing) return;
 		this.editing = null;
@@ -381,19 +429,51 @@ export class TableEditor {
 		if (!stay) this.selection = null;
 
 		if (value === this.model.getCell(cell.row, cell.col)) {
-			await this.render();
-			if (!stay) return;
-			this.focusRoot();
-			if (dRow !== 0 || dCol !== 0) this.move(dRow, dCol);
+			if (stay) this.select(stepFrom(this.model, cell, dRow, dCol));
+			await this.render(stay && reopen);
 			return;
 		}
-		await this.applyChange((model) => {
-			model.setCell(cell.row, cell.col, value);
-			if (!stay) return;
-			const next = stepFrom(model, cell, dRow, dCol);
-			return { top: next.row, left: next.col, bottom: next.row, right: next.col };
-		}, stay);
-		if (stay) this.focusRoot();
+		await this.applyChange(
+			(model) => {
+				model.setCell(cell.row, cell.col, value);
+				if (!stay) return;
+				const next = stepFrom(model, cell, dRow, dCol);
+				return { top: next.row, left: next.col, bottom: next.row, right: next.col };
+			},
+			stay,
+			stay && reopen,
+		);
+	}
+
+	/** Moves from the open cell by one step, leaving the table past its edge (see `onExit`). */
+	private async leaveCell(dRow: number, dCol: number): Promise<void> {
+		const cell = this.editing?.cell;
+		if (!cell) return;
+		const side = this.edgeSide(dRow, dCol);
+		if (!side) {
+			this.caretAtStart = dCol > 0;
+			await this.commitEdit(dRow, dCol);
+			return;
+		}
+		if (!this.options.onExit) return;
+		await this.commitEdit(0, 0, false);
+		if (this.options.onExit(side)) return;
+		this.select(cell);
+		this.takeFocus();
+	}
+
+	/** Puts the open cell's text back to what is saved. */
+	private revertEdit(): void {
+		const editing = this.editing;
+		if (!editing) return;
+		const saved = this.model.getCell(editing.cell.row, editing.cell.col);
+		applyToTextarea(editing.input, {
+			from: 0,
+			to: editing.input.value.length,
+			insert: saved,
+			selectionStart: saved.length,
+			selectionEnd: saved.length,
+		});
 	}
 
 	cancelEdit(): void {
@@ -408,9 +488,14 @@ export class TableEditor {
 	 * becomes the new selection; an array of ranges selects all of them, the
 	 * first being the active one. Rolls back if the mutation throws or
 	 * `onChange` reports that saving failed. `keepFocus` false lets the
-	 * re-rendered table leave focus where the user put it.
+	 * re-rendered table leave focus where the user put it; `reopen` opens
+	 * the selected cell for editing once it is re-rendered.
 	 */
-	async applyChange(mutate: (model: TableModel) => Range | Range[] | void, keepFocus = true): Promise<boolean> {
+	async applyChange(
+		mutate: (model: TableModel) => Range | Range[] | void,
+		keepFocus = true,
+		reopen = false,
+	): Promise<boolean> {
 		const previous = this.model;
 		const previousSelection = this.selection;
 		const next = previous.clone();
@@ -432,7 +517,7 @@ export class TableEditor {
 
 		// Changes come from interacting with this table, so it should usually keep focus.
 		const saved = this.options.onChange(next, { ...this.state, focused: keepFocus });
-		await this.render();
+		await this.render(reopen);
 		if (await saved) return true;
 
 		this.model = previous;
@@ -475,12 +560,16 @@ export class TableEditor {
 		// Keep the browser from starting a text selection or moving the editor cursor.
 		evt.preventDefault();
 		evt.stopPropagation();
-		if (this.editing) void this.commitEdit();
+		const committed = this.editing ? this.commitEdit() : Promise.resolve();
+		this.clickedCell = null;
 		// Dragging after Ctrl/Cmd+click grows the new range, unless the click deselected the cell.
 		if ((evt.ctrlKey || evt.metaKey) && !evt.shiftKey) this.dragging = this.toggleCell(cell);
 		else {
 			this.select(cell, evt.shiftKey);
 			this.dragging = true;
+			// Links and checkboxes inside the cell keep working instead.
+			const target = evt.target as Element;
+			if (!evt.shiftKey && !target.closest("a, input")) this.clickedCell = { cell, committed };
 		}
 		this.focusRoot();
 	};
@@ -497,12 +586,25 @@ export class TableEditor {
 	private readonly onMouseOver = (evt: MouseEvent) => {
 		if (!this.dragging) return;
 		const cell = this.cellFromEvent(evt);
-		if (cell) this.select(cell, true);
+		if (!cell) return;
+		const clicked = this.clickedCell?.cell;
+		if (clicked && !sameAnchor(this.model, clicked, cell)) this.clickedCell = null;
+		this.select(cell, true);
 	};
 
 	private readonly onMouseUp = () => {
 		this.dragging = false;
 		if (this.resizing) this.finishResize();
+		const clicked = this.clickedCell;
+		this.clickedCell = null;
+		if (!clicked) return;
+		// Wait for the previous cell's edit to be saved and the table re-rendered.
+		void clicked.committed.then(() => {
+			const focus = this.selection?.focus;
+			if (this.editing || !this.root.isConnected || !focus || !sameAnchor(this.model, focus, clicked.cell)) return;
+			if (this.getSelectedRanges().length > 1) return;
+			this.startEdit(clicked.cell);
+		});
 	};
 
 	/** Shows the resize cursor near column borders. */
@@ -582,11 +684,13 @@ export class TableEditor {
 		this.startEdit(cell);
 	};
 
-	private readonly onContextMenu = (evt: MouseEvent) => {
+	private readonly onContextMenu = async (evt: MouseEvent) => {
 		const cell = this.cellFromEvent(evt);
-		if (!cell || this.editingTarget(evt) || !this.options.onContextMenu) return;
+		if (!cell || !this.options.onContextMenu) return;
 		evt.preventDefault();
 		evt.stopPropagation();
+		// The table's menu replaces the textarea's; save the cell first.
+		if (this.editing) await this.commitEdit(0, 0, true, false);
 		const ranges = this.getSelectedRanges();
 		if (!ranges.some((range) => rangeContainsCell(range, cell.row, cell.col))) this.select(cell);
 		this.options.onContextMenu(evt, this.getSelectedRanges());
@@ -605,23 +709,18 @@ export class TableEditor {
 		const mod = evt.ctrlKey || evt.metaKey;
 		switch (evt.key) {
 			case "ArrowUp":
-				if (!evt.shiftKey && this.exitAt(-1, 0)) return true;
-				this.move(-1, 0, evt.shiftKey);
-				return true;
 			case "ArrowDown":
-				if (!evt.shiftKey && this.exitAt(1, 0)) return true;
-				this.move(1, 0, evt.shiftKey);
-				return true;
 			case "ArrowLeft":
-				if (!evt.shiftKey && this.exitAt(0, -1)) return true;
-				this.move(0, -1, evt.shiftKey);
+			case "ArrowRight": {
+				const [dRow, dCol] = ARROW_STEPS[evt.key]!;
+				if (!evt.shiftKey && this.exitAt(dRow, dCol)) return true;
+				this.move(dRow, dCol, evt.shiftKey);
+				if (!evt.shiftKey) this.takeFocus();
 				return true;
-			case "ArrowRight":
-				if (!evt.shiftKey && this.exitAt(0, 1)) return true;
-				this.move(0, 1, evt.shiftKey);
-				return true;
+			}
 			case "Tab":
 				this.move(0, evt.shiftKey ? -1 : 1);
+				this.takeFocus();
 				return true;
 			case "Enter":
 			case "F2":
@@ -629,8 +728,10 @@ export class TableEditor {
 				this.startEdit();
 				return true;
 			case "Escape":
+				// Several cells selected: go back to editing just the active one.
 				if (!this.selection) return false;
-				this.clearSelection();
+				this.select(this.selection.focus);
+				this.takeFocus();
 				return true;
 			case "Delete":
 			case "Backspace": {
@@ -665,18 +766,32 @@ export class TableEditor {
 			evt.preventDefault();
 			return;
 		}
-		if (evt.key === "Enter" && !evt.shiftKey) {
+		const input = evt.currentTarget as HTMLTextAreaElement;
+		const plain = !evt.shiftKey && !evt.altKey && !evt.ctrlKey && !evt.metaKey;
+		const step = ARROW_STEPS[evt.key];
+		// Arrows move the caret, and on to the next cell once it is at the text's edge.
+		if (step && plain && caretAtEdge(input, evt.key)) {
+			evt.preventDefault();
+			void this.leaveCell(...step);
+			return;
+		}
+		// Plain Enter types a newline; Ctrl/Cmd+Enter saves and moves down.
+		if (evt.key === "Enter" && (evt.ctrlKey || evt.metaKey)) {
 			evt.preventDefault();
 			void this.commitEdit(1, 0);
 		} else if (evt.key === "Tab") {
 			evt.preventDefault();
-			const input = evt.currentTarget as HTMLTextAreaElement;
 			const state = { text: input.value, start: input.selectionStart, end: input.selectionEnd };
+			// Tab indents list items (and multi-line selections); elsewhere it moves to the next cell.
+			if (!indentsHere(state)) {
+				void this.commitEdit(0, evt.shiftKey ? -1 : 1);
+				return;
+			}
 			const edit = indentLines(state, evt.shiftKey);
 			if (edit.insert !== state.text.slice(edit.from, edit.to)) applyToTextarea(input, edit);
 		} else if (evt.key === "Escape") {
 			evt.preventDefault();
-			this.cancelEdit();
+			this.revertEdit();
 		}
 	};
 
@@ -816,12 +931,18 @@ export class TableEditor {
 	private paintSelection(): void {
 		const ranges = this.getSelectedRanges();
 		const focus = this.selection?.focus;
+		this.root.classList.toggle("has-single-selection", this.isSingleSelection());
 		for (const td of Array.from(this.root.querySelectorAll<HTMLTableCellElement>("td[data-row]"))) {
 			const row = Number(td.dataset.row);
 			const col = Number(td.dataset.col);
 			td.classList.toggle("is-selected", ranges.some((range) => rangeContainsCell(range, row, col)));
 			td.classList.toggle("is-focus", focus !== undefined && focus.row === row && focus.col === col);
 		}
+	}
+
+	/** The cell, or the whole merge it is part of, as a range. */
+	private cellRange(cell: CellRef): Range {
+		return this.model.expandToMerges({ top: cell.row, left: cell.col, bottom: cell.row, right: cell.col });
 	}
 
 	private cellElement(cell: CellRef): HTMLTableCellElement | null {
@@ -843,6 +964,21 @@ export class TableEditor {
 
 	private focusRoot(): void {
 		if (this.root.isConnected) this.root.focus({ preventScroll: true });
+	}
+
+	/** Focuses the table: a single selected cell opens for editing; several cells stay selected. */
+	private takeFocus(): void {
+		const atStart = this.caretAtStart;
+		this.caretAtStart = false;
+		if (!this.root.isConnected) return;
+		if (this.isSingleSelection()) this.startEdit(undefined, undefined, atStart ? [0, 0] : undefined);
+		else this.focusRoot();
+	}
+
+	private isSingleSelection(): boolean {
+		const ranges = this.getSelectedRanges();
+		const focus = this.selection?.focus;
+		return ranges.length === 1 && focus !== undefined && rangesEqual(ranges[0]!, this.cellRange(focus));
 	}
 
 	private inBounds(cell: CellRef): boolean {
@@ -905,6 +1041,40 @@ const INPUT_SHORTCUTS: Record<Exclude<ShortcutKey, "a">, (state: TextState) => T
 	i: (state) => toggleMarker(state, "*"),
 	k: insertLink,
 };
+
+const ARROW_STEPS: Record<string, [number, number]> = {
+	ArrowUp: [-1, 0],
+	ArrowDown: [1, 0],
+	ArrowLeft: [0, -1],
+	ArrowRight: [0, 1],
+};
+
+/** Whether an arrow key would move the caret out of the text (no text selected). */
+function caretAtEdge(input: HTMLTextAreaElement, key: string): boolean {
+	const { value, selectionStart: start, selectionEnd: end } = input;
+	if (start !== end) return false;
+	switch (key) {
+		case "ArrowUp":
+			return !value.slice(0, start).includes("\n");
+		case "ArrowDown":
+			return !value.slice(start).includes("\n");
+		case "ArrowLeft":
+			return start === 0;
+		case "ArrowRight":
+			return start === value.length;
+	}
+	return false;
+}
+
+/** Whether Tab should indent: the caret is on a list item, or the selection spans lines. */
+function indentsHere(state: TextState): boolean {
+	const { text, start, end } = state;
+	if (text.slice(start, end).includes("\n")) return true;
+	const from = text.lastIndexOf("\n", start - 1) + 1;
+	const lineEnd = text.indexOf("\n", start);
+	const line = text.slice(from, lineEnd === -1 ? text.length : lineEnd);
+	return /^\s*([-*+]|\d+[.)])(\s|$)/.test(line);
+}
 
 function clamp(value: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, value));

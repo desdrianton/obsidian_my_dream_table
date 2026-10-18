@@ -61,6 +61,11 @@ function key(target: Element, keyName: string, init: KeyboardEventInit = {}): Ke
 	return evt;
 }
 
+/** Presses a key wherever focus is: the open cell's textarea, or the table. */
+function press(keyName: string, init: KeyboardEventInit = {}): KeyboardEvent {
+	return key(document.activeElement ?? editor.root, keyName, init);
+}
+
 function input(): HTMLTextAreaElement {
 	const el = container.querySelector<HTMLTextAreaElement>("textarea.dream-table-input");
 	if (!el) throw new Error("Not editing");
@@ -274,15 +279,63 @@ describe("multiple ranges (Ctrl/Cmd+click)", () => {
 });
 
 describe("keyboard navigation", () => {
-	it("moves with arrows and extends with shift", async () => {
+	it("moves with arrows and extends with shift in a multi-cell selection", async () => {
 		await mount(grid());
-		mouse(td("A1"), "mousedown");
+		editor.select({ row: 0, col: 0 });
+		editor.select({ row: 0, col: 1 }, true);
+		key(editor.root, "ArrowDown", { shiftKey: true });
+		expect(selected()).toBe("A1:B2");
+		expect(editor.isEditing).toBe(false);
 		key(editor.root, "ArrowRight");
-		key(editor.root, "ArrowDown");
+		expect(selected()).toBe("C2");
+		expect(editor.isEditing).toBe(true);
+		expect(input().value).toBe("C2");
+	});
+
+	it("moves to the next cell when the caret is at the text's edge", async () => {
+		await mount(grid());
+		editor.startEdit({ row: 1, col: 1 });
+		input().setSelectionRange(1, 1);
+		press("ArrowRight");
+		expect(editor.isEditing).toBe(true);
 		expect(selected()).toBe("B2");
-		key(editor.root, "ArrowRight", { shiftKey: true });
-		expect(selected()).toBe("B2:C2");
-		key(editor.root, "ArrowLeft");
+		input().setSelectionRange(2, 2);
+		press("ArrowRight");
+		await flush();
+		expect(selected()).toBe("C2");
+		expect(input().selectionStart).toBe(0);
+		press("ArrowLeft");
+		await flush();
+		expect(selected()).toBe("B2");
+		expect(input().selectionStart).toBe(2);
+		press("ArrowUp");
+		await flush();
+		expect(selected()).toBe("B1");
+		press("ArrowDown");
+		await flush();
+		press("ArrowDown");
+		await flush();
+		expect(selected()).toBe("B3");
+		expect(editor.isEditing).toBe(true);
+	});
+
+	it("keeps Shift+arrows for selecting text", async () => {
+		await mount(grid());
+		editor.startEdit({ row: 1, col: 1 });
+		const evt = press("ArrowRight", { shiftKey: true });
+		expect(evt.defaultPrevented).toBe(false);
+		expect(selected()).toBe("B2");
+	});
+
+	it("moves up and down by line inside a multi-line cell", async () => {
+		const m = grid();
+		m.setCell(1, 1, "one\ntwo");
+		await mount(m);
+		editor.startEdit({ row: 1, col: 1 });
+		input().setSelectionRange(5, 5);
+		expect(press("ArrowUp").defaultPrevented).toBe(false);
+		input().setSelectionRange(1, 1);
+		expect(press("ArrowDown").defaultPrevented).toBe(false);
 		expect(selected()).toBe("B2");
 	});
 
@@ -294,12 +347,26 @@ describe("keyboard navigation", () => {
 
 	it("moves with Tab and Shift+Tab and prevents focus leaving", async () => {
 		await mount(grid());
-		mouse(td("B1"), "mousedown");
-		const evt = key(editor.root, "Tab");
+		editor.startEdit({ row: 0, col: 1 });
+		const evt = press("Tab");
+		await flush();
 		expect(evt.defaultPrevented).toBe(true);
 		expect(selected()).toBe("C1");
-		key(editor.root, "Tab", { shiftKey: true });
+		expect(input().value).toBe("C1");
+		press("Tab", { shiftKey: true });
+		await flush();
 		expect(selected()).toBe("B1");
+	});
+
+	it("indents list items with Tab instead of moving", async () => {
+		const m = grid();
+		m.setCell(0, 0, "- a\n- b");
+		await mount(m);
+		editor.startEdit({ row: 0, col: 0 });
+		press("Tab");
+		await flush();
+		expect(selected()).toBe("A1");
+		expect(input().value).toBe("- a\n\t- b");
 	});
 
 	it("selects every cell with Ctrl+A", async () => {
@@ -312,12 +379,13 @@ describe("keyboard navigation", () => {
 		expect(container.querySelectorAll("td.is-selected")).toHaveLength(8);
 	});
 
-	it("clears the selection with Escape", async () => {
+	it("goes back to editing the active cell with Escape", async () => {
 		await mount(grid());
-		mouse(td("B1"), "mousedown");
+		editor.select({ row: 0, col: 0 });
+		editor.select({ row: 1, col: 1 }, true);
 		key(editor.root, "Escape");
-		expect(selected()).toBeNull();
-		expect(container.querySelector(".is-selected")).toBeNull();
+		expect(selected()).toBe("B2");
+		expect(editor.isEditing).toBe(true);
 	});
 
 	it("leaves unhandled keys alone", async () => {
@@ -328,6 +396,71 @@ describe("keyboard navigation", () => {
 });
 
 describe("editing cells", () => {
+	it("opens a cell with a single click", async () => {
+		await mount(grid());
+		mouse(td("B2"), "mousedown");
+		mouse(document.body, "mouseup");
+		await flush();
+		expect(editor.isEditing).toBe(true);
+		expect(input().value).toBe("B2");
+		expect(input().selectionStart).toBe(2);
+		expect(selected()).toBe("B2");
+	});
+
+	it("tints only a selection of several cells", async () => {
+		await mount(grid());
+		mouse(td("B2"), "mousedown");
+		expect(editor.root.classList.contains("has-single-selection")).toBe(true);
+		mouse(td("C3"), "mouseover");
+		expect(editor.root.classList.contains("has-single-selection")).toBe(false);
+	});
+
+	it("does not open a cell after dragging, Shift+click or Ctrl+click", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(td("B2"), "mouseover");
+		mouse(document.body, "mouseup");
+		mouse(td("C3"), "mousedown", { shiftKey: true });
+		mouse(document.body, "mouseup");
+		mouse(td("A3"), "mousedown", { ctrlKey: true });
+		mouse(document.body, "mouseup");
+		await flush();
+		expect(editor.isEditing).toBe(false);
+	});
+
+	it("saves the open cell and opens the clicked one", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(document.body, "mouseup");
+		await flush();
+		input().value = "changed";
+		mouse(td("C3"), "mousedown");
+		mouse(document.body, "mouseup");
+		await flush();
+		expect(editor.currentModel.getCell(0, 0)).toBe("changed");
+		expect(editor.isEditing).toBe(true);
+		expect(input().value).toBe("C3");
+		expect(td("C3").classList.contains("is-editing")).toBe(true);
+	});
+
+	it("carries an open edit over to a re-created table", async () => {
+		await mount(grid());
+		mouse(td("B1"), "mousedown");
+		mouse(document.body, "mouseup");
+		await flush();
+		input().value = "draft";
+		input().setSelectionRange(1, 3);
+		const state = editor.state;
+		expect(state.editing).toEqual({ cell: { row: 0, col: 1 }, text: "draft", start: 1, end: 3 });
+		editor.destroy();
+
+		await mount(grid(), { initialState: state });
+		expect(editor.isEditing).toBe(true);
+		expect(input().value).toBe("draft");
+		expect([input().selectionStart, input().selectionEnd]).toEqual([1, 3]);
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
 	it("opens a textarea with the raw markdown on double-click", async () => {
 		const m = grid();
 		m.setCell(1, 1, "**bold**");
@@ -338,12 +471,12 @@ describe("editing cells", () => {
 		expect(document.activeElement).toBe(input());
 	});
 
-	it("commits with Enter, saves, and moves down", async () => {
+	it("commits with Ctrl+Enter, saves, and moves down", async () => {
 		await mount(grid());
 		mouse(td("B1"), "mousedown");
 		key(editor.root, "Enter");
 		input().value = "new value";
-		key(input(), "Enter");
+		key(input(), "Enter", { ctrlKey: true });
 		await flush();
 
 		expect(onChange).toHaveBeenCalledTimes(1);
@@ -353,32 +486,35 @@ describe("editing cells", () => {
 		expect(state.focused).toBe(true);
 		expect(td("B1").textContent).toBe("new value");
 		expect(selected()).toBe("B2");
-		expect(editor.isEditing).toBe(false);
+		expect(editor.isEditing).toBe(true);
+		expect(input().value).toBe("B2");
 	});
 
-	it("keeps newlines typed with Shift+Enter", async () => {
+	it("keeps newlines typed with Enter", async () => {
 		await mount(grid());
 		mouse(td("A1"), "dblclick");
-		const evt = key(input(), "Enter", { shiftKey: true });
-		expect(evt.defaultPrevented).toBe(false);
-		expect(editor.isEditing).toBe(true);
+		for (const options of [{}, { shiftKey: true }]) {
+			const evt = key(input(), "Enter", options);
+			expect(evt.defaultPrevented).toBe(false);
+			expect(editor.isEditing).toBe(true);
+		}
 	});
 
-	it("cancels with Escape without saving", async () => {
+	it("puts the saved text back with Escape", async () => {
 		await mount(grid());
 		mouse(td("A1"), "dblclick");
 		input().value = "discarded";
 		key(input(), "Escape");
 		await flush();
 		expect(onChange).not.toHaveBeenCalled();
-		expect(td("A1").textContent).toBe("A1");
-		expect(editor.isEditing).toBe(false);
+		expect(input().value).toBe("A1");
+		expect(editor.isEditing).toBe(true);
 	});
 
 	it("does not save when the text is unchanged", async () => {
 		await mount(grid());
 		mouse(td("A1"), "dblclick");
-		key(input(), "Enter");
+		key(input(), "Enter", { metaKey: true });
 		await flush();
 		expect(onChange).not.toHaveBeenCalled();
 		expect(selected()).toBe("A2");
@@ -461,7 +597,7 @@ describe("editing cells", () => {
 		mouse(td("A1"), "dblclick");
 		input().setSelectionRange(0, 2);
 		key(input(), "b", { ctrlKey: true });
-		key(input(), "Enter");
+		key(input(), "Enter", { ctrlKey: true });
 		await flush();
 		expect(editor.currentModel.getCell(0, 0)).toBe("**A1**");
 	});
@@ -469,9 +605,22 @@ describe("editing cells", () => {
 	it("does not let keys inside the textarea reach the table handler", async () => {
 		await mount(grid());
 		mouse(td("A1"), "dblclick");
-		key(input(), "ArrowDown");
-		expect(selected()).toBe("A1");
+		const evt = key(input(), "Delete");
+		expect(evt.defaultPrevented).toBe(false);
+		expect(editor.currentModel.getCell(0, 0)).toBe("A1");
 		expect(editor.isEditing).toBe(true);
+	});
+
+	it("saves the open cell before showing the table's context menu", async () => {
+		const onContextMenu = vi.fn();
+		await mount(grid(), { onContextMenu });
+		editor.startEdit({ row: 0, col: 0 });
+		input().value = "changed";
+		mouse(input(), "contextmenu");
+		await flush();
+		expect(editor.currentModel.getCell(0, 0)).toBe("changed");
+		expect(onContextMenu).toHaveBeenCalledTimes(1);
+		expect(onContextMenu.mock.calls[0]![1]).toEqual([r("A1")]);
 	});
 });
 
@@ -969,12 +1118,28 @@ describe("leaving with arrow keys", () => {
 		key(editor.root, "ArrowLeft");
 		expect(onExit).not.toHaveBeenCalled();
 		expect(selected()).toBe("A2");
-		editor.select({ row: 0, col: 0 });
-		key(editor.root, "ArrowLeft");
+		editor.startEdit({ row: 0, col: 0 });
+		input().setSelectionRange(0, 0);
+		press("ArrowLeft");
+		await flush();
 		expect(onExit).toHaveBeenLastCalledWith("before");
-		editor.select({ row: 2, col: 2 });
-		key(editor.root, "ArrowRight");
+		expect(editor.isEditing).toBe(false);
+		editor.startEdit({ row: 2, col: 2 });
+		press("ArrowRight");
+		await flush();
 		expect(onExit).toHaveBeenLastCalledWith("after");
+	});
+
+	it("saves the open cell when leaving from it", async () => {
+		const onExit = await mountWithExit(grid());
+		editor.startEdit({ row: 0, col: 1 });
+		input().value = "changed";
+		input().setSelectionRange(0, 0);
+		press("ArrowUp");
+		await flush();
+		expect(onExit).toHaveBeenLastCalledWith("before");
+		expect(editor.currentModel.getCell(0, 1)).toBe("changed");
+		expect(selected()).toBeNull();
 	});
 
 	it("moves inside the table otherwise, and with Shift", async () => {
@@ -1062,8 +1227,11 @@ describe("entering from the note", () => {
 		await mount(m);
 		expect(editor.enter("before")).toBe(true);
 		expect(selected()).toBe("A1");
-		expect(document.activeElement).toBe(editor.root);
+		expect(document.activeElement).toBe(input());
+		expect(input().selectionStart).toBe(0);
 		expect(editor.enter("after")).toBe(true);
 		expect(selected()).toBe("B3:C3");
+		expect(input().value).toBe("B3");
+		expect(input().selectionStart).toBe(2);
 	});
 });

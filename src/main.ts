@@ -49,9 +49,11 @@ export default class DreamTablePlugin extends Plugin {
 	/**
 	 * Saving rewrites the code block, which makes Obsidian destroy and
 	 * re-create the table. The old view parks its selection here, keyed by
-	 * note and block position, so the new view can restore it.
+	 * note and block position, so the new view can restore it. The state is
+	 * read when the new view takes it, so a cell edit opened in the meantime
+	 * carries over too.
 	 */
-	private readonly handoff = new Map<string, { state: EditorState; at: number }>();
+	private readonly handoff = new Map<string, { state: () => EditorState; at: number }>();
 	/** Rendered tables, so the note's cursor can hand focus to one. */
 	readonly tables = new Set<DreamTableView>();
 
@@ -88,14 +90,14 @@ export default class DreamTablePlugin extends Plugin {
 		return false;
 	}
 
-	parkState(key: string, state: EditorState): void {
+	parkState(key: string, state: () => EditorState): void {
 		this.handoff.set(key, { state, at: Date.now() });
 	}
 
 	takeState(key: string): EditorState | undefined {
 		const entry = this.handoff.get(key);
 		this.handoff.delete(key);
-		return entry && Date.now() - entry.at < STATE_HANDOFF_MS ? entry.state : undefined;
+		return entry && Date.now() - entry.at < STATE_HANDOFF_MS ? entry.state() : undefined;
 	}
 
 	/** The editor of `sourcePath` in Live Preview or source mode, if one is open. */
@@ -174,6 +176,8 @@ class DreamTableView extends MarkdownRenderChild {
 	 */
 	private readonly scope: Scope;
 	private scopePushed = false;
+	/** The editor's state when this view was unloaded, for a late handoff. */
+	private lastState: EditorState | null = null;
 
 	constructor(
 		private readonly plugin: DreamTablePlugin,
@@ -202,6 +206,15 @@ class DreamTableView extends MarkdownRenderChild {
 				});
 			}
 		}
+		// Ctrl/Cmd+Enter saves the cell being edited (handled by the editor);
+		// keep Obsidian's own Mod+Enter command from running as well.
+		this.scope.register(["Mod"], "Enter", () => {
+			if (!this.editor?.containsFocus) {
+				this.setScopeActive(false);
+				return true;
+			}
+			return !this.editor.isEditing;
+		});
 	}
 
 	override onload(): void {
@@ -239,6 +252,7 @@ class DreamTableView extends MarkdownRenderChild {
 
 	override onunload(): void {
 		this.plugin.tables.delete(this);
+		this.lastState = this.editor?.state ?? this.lastState;
 		this.editor?.destroy();
 		this.editor = null;
 		this.setScopeActive(false);
@@ -333,7 +347,7 @@ class DreamTableView extends MarkdownRenderChild {
 
 		const written = await this.plugin.writeBlockBody(this.ctx.sourcePath, this.location, this.source, body, (found) => {
 			this.location = found;
-			this.plugin.parkState(this.stateKey(), state);
+			this.plugin.parkState(this.stateKey(), () => this.handOff(state));
 		});
 		if (!written) {
 			new Notice("Dream Table: this table was changed elsewhere. Close and reopen the note, then try again.");
@@ -346,6 +360,17 @@ class DreamTableView extends MarkdownRenderChild {
 			lineEnd: written.lineStart + 1 + bodyLineCount(body),
 		};
 		return true;
+	}
+
+	/**
+	 * The state for the re-created table: `saved` (as of the save), unless a
+	 * cell edit has been opened since, which then moves to the new table.
+	 */
+	private handOff(saved: EditorState): EditorState {
+		const live = this.editor?.isEditing ? this.editor.state : this.lastState;
+		if (!live?.editing) return saved;
+		this.editor?.dropEdit();
+		return live;
 	}
 
 	/** `ranges` are the selected ranges; cell settings apply to all, and show the first one's. */

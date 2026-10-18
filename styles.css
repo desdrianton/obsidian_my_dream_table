@@ -166,14 +166,20 @@
 }
 
 /* Tint selected cells without hiding their own background color. */
-.dream-table td.is-selected {
-	background-image: linear-gradient(
-		color-mix(in srgb, var(--interactive-accent) 20%, transparent),
-		color-mix(in srgb, var(--interactive-accent) 20%, transparent)
-	);
+.dream-table-editor {
+	--dream-table-selected-bg: color-mix(in srgb, var(--interactive-accent) 20%, transparent);
 }
 
-.dream-table-editor:focus-within td.is-focus {
+/* Only a selection of several cells is tinted; a single cell looks as it is. */
+.dream-table-editor.has-single-selection {
+	--dream-table-selected-bg: transparent;
+}
+
+.dream-table td.is-selected {
+	background-image: linear-gradient(var(--dream-table-selected-bg), var(--dream-table-selected-bg));
+}
+
+.dream-table-editor:focus-within td.is-focus:not(.is-editing) {
 	outline: 2px solid var(--interactive-accent);
 	outline-offset: -2px;
 }
@@ -181,7 +187,6 @@
 /* The textarea fills the cell's content box, so the padding stays put while editing. */
 .dream-table td.is-editing {
 	cursor: text;
-	box-shadow: inset 0 0 0 2px var(--interactive-accent);
 }
 
 .dream-table-input {
@@ -452,9 +457,6 @@
 
 .dream-table td:is(.is-frozen-row, .is-frozen-col).is-selected {
 	background-image:
-		linear-gradient(
-			color-mix(in srgb, var(--interactive-accent) 20%, transparent),
-			color-mix(in srgb, var(--interactive-accent) 20%, transparent)
-		),
+		linear-gradient(var(--dream-table-selected-bg), var(--dream-table-selected-bg)),
 		linear-gradient(var(--dream-table-cell-bg), var(--dream-table-cell-bg));
 }

@@ -53,19 +53,18 @@ If the block has a mistake (an unknown key, a bad range or color, …), the tabl
 
 Tables are edited where they are, in Live Preview and Reading view; every change is written back to the code block (and can be undone with the note's undo while it is open in the editor). Tables shown inside an embed are read-only.
 
-**Selecting**
-- Click a cell, drag across cells, or Shift+click to select a range. Merged cells are always selected whole.
-- Ctrl+click (Cmd+click on macOS) adds more cells to the selection; Ctrl+drag adds a range. Ctrl+click a selected cell again to deselect it. Formatting then applies to every selected cell; merging and inserting or deleting rows and columns need a single range.
-- Arrow keys and Tab / Shift+Tab move between cells; Shift+arrow grows the selection. Ctrl+A selects every cell, Escape clears the selection. Clicking outside the table also clears it.
-- From the note, moving the cursor into the table with the arrow keys selects its first (or last) cell; arrowing past the table's edge puts the cursor back in the note.
-
-**Editing a cell**
-- Double-click, press Enter or F2, or just start typing (which replaces the content) to edit the cell's markdown.
-- Enter saves and moves down; Shift+Enter adds a line; Escape cancels; clicking elsewhere saves.
-- Tab / Shift+Tab indents or outdents the current lines (handy for nested lists).
+**Editing cells** (there is no separate select mode: the cell you are in is always open for editing)
+- Click a cell to edit its markdown. From the note, moving the cursor into the table with the arrow keys opens its first (or last) cell.
+- Arrow keys move the caret; at the edge of the text they move on to the next cell, and past the table's edge back into the note.
+- Tab / Shift+Tab move to the next / previous cell; on a list item (or with several lines selected) they indent or outdent instead.
+- Enter adds a line; Ctrl/Cmd+Enter saves and moves down; Escape puts back the saved text; clicking elsewhere saves.
 - Ctrl+B / Ctrl+I wrap the selected text in bold / italic, Ctrl+K inserts a link, Ctrl+A selects all of the cell's text.
-- Delete or Backspace (when not editing) clears the selected cells.
 - Task checkboxes (`- [ ] todo`) can be ticked right in the table; the change is saved to the cell.
+
+**Selecting several cells**
+- Drag across cells or Shift+click to select a range. Merged cells are always selected whole.
+- Ctrl+click (Cmd+click on macOS) adds more cells to the selection; Ctrl+drag adds a range. Ctrl+click a selected cell again to deselect it. Formatting then applies to every selected cell; merging and inserting or deleting rows and columns need a single range.
+- Shift+arrow grows the selection; Delete or Backspace clears the selected cells; an arrow key or Escape goes back to editing a single cell.
 
 **Right-click menu** (acts on the selection)
 - *Merge cells* / *Unmerge cells*
