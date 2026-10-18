@@ -57,7 +57,7 @@ Tables are edited where they are, in Live Preview and Reading view; every change
 - Click a cell to edit its markdown. From the note, moving the cursor into the table with the arrow keys opens its first (or last) cell.
 - Arrow keys move the caret; at the edge of the text they move on to the next cell, and past the table's edge back into the note.
 - Tab / Shift+Tab move to the next / previous cell; on a list item (or with several lines selected) they indent or outdent instead.
-- Enter adds a line; Ctrl/Cmd+Enter saves and moves down; Escape puts back the saved text; clicking elsewhere saves.
+- Enter adds a line; Ctrl/Cmd+Enter saves and starts a new row below; Escape puts back the saved text; clicking elsewhere saves.
 - Ctrl+B / Ctrl+I wrap the selected text in bold / italic, Ctrl+K inserts a link, Ctrl+A selects all of the cell's text.
 - Task checkboxes (`- [ ] todo`) can be ticked right in the table; the change is saved to the cell.
 

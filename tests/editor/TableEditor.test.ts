@@ -471,7 +471,7 @@ describe("editing cells", () => {
 		expect(document.activeElement).toBe(input());
 	});
 
-	it("commits with Ctrl+Enter, saves, and moves down", async () => {
+	it("saves with Ctrl+Enter and inserts a row below", async () => {
 		await mount(grid());
 		mouse(td("B1"), "mousedown");
 		key(editor.root, "Enter");
@@ -481,13 +481,52 @@ describe("editing cells", () => {
 
 		expect(onChange).toHaveBeenCalledTimes(1);
 		const [savedModel, state] = onChange.mock.calls[0]!;
+		expect(savedModel.rowCount).toBe(4);
 		expect(savedModel.getCell(0, 1)).toBe("new value");
+		expect(savedModel.getCell(1, 1)).toBe("");
+		expect(savedModel.getCell(2, 1)).toBe("B2");
 		expect(state.selection?.focus).toEqual({ row: 1, col: 1 });
 		expect(state.focused).toBe(true);
+		// A table re-created by the save opens the new cell too.
+		expect(state.editing).toEqual({ cell: { row: 1, col: 1 }, text: "", start: 0, end: 0 });
 		expect(td("B1").textContent).toBe("new value");
 		expect(selected()).toBe("B2");
 		expect(editor.isEditing).toBe(true);
-		expect(input().value).toBe("B2");
+		expect(input().value).toBe("");
+	});
+
+	it("adds a row with Ctrl+Enter on the last row", async () => {
+		await mount(grid());
+		mouse(td("B3"), "mousedown");
+		key(editor.root, "Enter");
+		input().value = "last";
+		key(input(), "Enter", { ctrlKey: true });
+		await flush();
+
+		expect(onChange).toHaveBeenCalledTimes(1);
+		const [savedModel, state] = onChange.mock.calls[0]!;
+		expect(savedModel.rowCount).toBe(4);
+		expect(savedModel.getCell(2, 1)).toBe("last");
+		expect(savedModel.getCell(3, 1)).toBe("");
+		expect(state.selection?.focus).toEqual({ row: 3, col: 1 });
+		expect(selected()).toBe("B4");
+		expect(editor.isEditing).toBe(true);
+		expect(input().value).toBe("");
+	});
+
+	it("inserts the Ctrl+Enter row below a merged cell", async () => {
+		const model = grid();
+		model.merge({ top: 0, left: 0, bottom: 1, right: 0 });
+		await mount(model);
+		mouse(td("A1"), "dblclick");
+		key(input(), "Enter", { metaKey: true });
+		await flush();
+
+		const [savedModel, state] = onChange.mock.calls[0]!;
+		expect(savedModel.rowCount).toBe(4);
+		expect(savedModel.getCell(2, 0)).toBe("");
+		expect(savedModel.getCell(3, 0)).toBe("A3");
+		expect(state.selection?.focus).toEqual({ row: 2, col: 0 });
 	});
 
 	it("keeps newlines typed with Enter", async () => {
@@ -514,7 +553,7 @@ describe("editing cells", () => {
 	it("does not save when the text is unchanged", async () => {
 		await mount(grid());
 		mouse(td("A1"), "dblclick");
-		key(input(), "Enter", { metaKey: true });
+		mouse(td("A2"), "mousedown");
 		await flush();
 		expect(onChange).not.toHaveBeenCalled();
 		expect(selected()).toBe("A2");

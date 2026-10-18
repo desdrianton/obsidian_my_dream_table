@@ -445,6 +445,31 @@ export class TableEditor {
 		);
 	}
 
+	/**
+	 * Saves the open cell, inserts a row below it (below its merge, if it
+	 * sits in one), and opens the cell under it. While the table is
+	 * collapsed the new row would be hidden, so it just moves down instead.
+	 * This is what Ctrl/Cmd+Enter does while a cell is being edited.
+	 */
+	async commitAndInsertRow(): Promise<void> {
+		const editing = this.editing;
+		if (!editing) return;
+		if (this.model.collapsed) return this.commitEdit(1, 0);
+		this.editing = null;
+		const { cell, input } = editing;
+		const value = input.value;
+		await this.applyChange(
+			(model) => {
+				model.setCell(cell.row, cell.col, value);
+				const row = (model.getMergeAt(cell.row, cell.col)?.bottom ?? cell.row) + 1;
+				model.insertRows(row);
+				return { top: row, bottom: row, left: cell.col, right: cell.col };
+			},
+			true,
+			true,
+		);
+	}
+
 	/** Moves from the open cell by one step, leaving the table past its edge (see `onExit`). */
 	private async leaveCell(dRow: number, dCol: number): Promise<void> {
 		const cell = this.editing?.cell;
@@ -516,7 +541,16 @@ export class TableEditor {
 		this.selection = this.clampSelection(this.selection);
 
 		// Changes come from interacting with this table, so it should usually keep focus.
-		const saved = this.options.onChange(next, { ...this.state, focused: keepFocus });
+		const state: EditorState = { ...this.state, focused: keepFocus };
+		// Saving may re-create the table before this one has reopened the
+		// cell, so tell the new table which cell to open.
+		const focus = this.selection?.focus;
+		if (reopen && focus && this.isSingleSelection()) {
+			const text = next.getCell(focus.row, focus.col);
+			const caret = this.caretAtStart ? 0 : text.length;
+			state.editing = { cell: { ...focus }, text, start: caret, end: caret };
+		}
+		const saved = this.options.onChange(next, state);
 		await this.render(reopen);
 		if (await saved) return true;
 
@@ -775,10 +809,11 @@ export class TableEditor {
 			void this.leaveCell(...step);
 			return;
 		}
-		// Plain Enter types a newline; Ctrl/Cmd+Enter saves and moves down.
+		// Plain Enter types a newline; Ctrl/Cmd+Enter saves and starts a new row below.
 		if (evt.key === "Enter" && (evt.ctrlKey || evt.metaKey)) {
+			// The host may already have routed this key here (see onFocusChange).
+			if (!evt.defaultPrevented) void this.commitAndInsertRow();
 			evt.preventDefault();
-			void this.commitEdit(1, 0);
 		} else if (evt.key === "Tab") {
 			evt.preventDefault();
 			const state = { text: input.value, start: input.selectionStart, end: input.selectionEnd };

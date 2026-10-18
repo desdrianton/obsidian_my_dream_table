@@ -206,14 +206,17 @@ class DreamTableView extends MarkdownRenderChild {
 				});
 			}
 		}
-		// Ctrl/Cmd+Enter saves the cell being edited (handled by the editor);
-		// keep Obsidian's own Mod+Enter command from running as well.
+		// Ctrl/Cmd+Enter saves the cell being edited and starts a new row.
+		// Returning false stops the event, so the textarea never sees it:
+		// run it here, which also keeps Obsidian's own Mod+Enter from running.
 		this.scope.register(["Mod"], "Enter", () => {
 			if (!this.editor?.containsFocus) {
 				this.setScopeActive(false);
 				return true;
 			}
-			return !this.editor.isEditing;
+			if (!this.editor.isEditing) return true;
+			void this.editor.commitAndInsertRow();
+			return false;
 		});
 	}
 
