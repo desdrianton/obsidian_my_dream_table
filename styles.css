@@ -114,10 +114,6 @@
 	line-height: var(--dream-table-line-height);
 }
 
-.dream-table td :is(ul, ol) {
-	padding-inline-start: var(--size-4-5);
-}
-
 .dream-table td li {
 	margin-block: 0;
 }
