@@ -20,6 +20,8 @@ styles:
 ```
 ````
 
+To turn an ordinary Markdown table into a Dream Table, put the cursor in it and run **Dream Table: Convert Markdown table to Dream Table** (or right-click → *Convert to Dream Table*). The first row becomes the header, column alignment (`:--`, `:-:`, `--:`) becomes `align` styles, `\|` becomes `|`, and `<br>` becomes a line break in the cell. Tables inside callouts stay in the callout.
+
 - **`rows`**: list of rows; each cell is markdown (links, `[[wikilinks]]`, `**bold**`, ...). Short rows are padded with empty cells.
   Images work like anywhere else in Obsidian: `![[photo.png]]`, `![[photo.png|200]]` (no need to escape `|`), or `![](https://…)`. Paste or drop an image onto a cell to save it as an attachment and embed it, or right-click → *Insert image…* to pick one from the vault. Images shrink to fit their column.
 - **`header`**: number of rows at the top that form the header (default `0`, no header). Header cells get the theme's table-header look unless styled otherwise. Right-click → *Make header (rows up to here)* / *Remove header* to set it from the table. A merge may not cross the end of the header.

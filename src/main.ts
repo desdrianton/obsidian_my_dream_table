@@ -11,6 +11,7 @@ import {
 	TFile,
 	parseYaml,
 	type App,
+	type Editor,
 	type MarkdownPostProcessorContext,
 } from "obsidian";
 import {
@@ -48,6 +49,7 @@ import { locateTableBlock } from "./blocks";
 import { findScrollContainer, holdScrollPosition } from "./scroll";
 import { attachmentName, isImageExtension, toEmbed } from "./images";
 import { enterTableExtension, type TableEntry } from "./enterTable";
+import { convertMarkdownTable, findMarkdownTable } from "./convert";
 import type { EditorView } from "@codemirror/view";
 
 /** How long a saved editor state waits for the re-rendered table to pick it up. */
@@ -83,6 +85,44 @@ export default class DreamTablePlugin extends Plugin {
 				}).open();
 			},
 		});
+
+		this.addCommand({
+			id: "convert-markdown-table",
+			name: "Convert Markdown table to Dream Table",
+			editorCheckCallback: (checking, editor) => {
+				if (checking) return this.markdownTableAtCursor(editor) !== null;
+				this.convertTableAtCursor(editor);
+				return true;
+			},
+		});
+		this.registerEvent(
+			this.app.workspace.on("editor-menu", (menu, editor) => {
+				if (!this.markdownTableAtCursor(editor)) return;
+				menu.addItem((item) =>
+					item
+						.setTitle("Convert to Dream Table")
+						.setIcon("table")
+						.onClick(() => this.convertTableAtCursor(editor)),
+				);
+			}),
+		);
+	}
+
+	/** The markdown table the cursor is in, if any. */
+	private markdownTableAtCursor(editor: Editor) {
+		return findMarkdownTable((line) => editor.getLine(line), editor.lineCount(), editor.getCursor().line);
+	}
+
+	/** Replaces the markdown table under the cursor with a dreamtable block. */
+	private convertTableAtCursor(editor: Editor): void {
+		const table = this.markdownTableAtCursor(editor);
+		if (!table) return;
+		const { lineStart, lineEnd } = table.location;
+		const lines: string[] = [];
+		for (let i = lineStart; i <= lineEnd; i++) lines.push(editor.getLine(i));
+		const block = convertMarkdownTable(lines, table.prefix);
+		if (block === null) return;
+		editor.replaceRange(block, { line: lineStart, ch: 0 }, { line: lineEnd, ch: editor.getLine(lineEnd).length });
 	}
 
 	/** Focuses the table rendered for the block at `entry` in a note editor. */
