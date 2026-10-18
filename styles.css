@@ -10,6 +10,14 @@
 	white-space: normal;
 }
 
+/*
+ * Live Preview outlines a code block while it is hovered. The table already
+ * shows its own borders, so the extra frame only flickers around it.
+ */
+.markdown-source-view.mod-cm6 .cm-embed-block:has(.dream-table-wrapper, .dream-table-error):hover {
+	box-shadow: none;
+}
+
 .dream-table {
 	border-collapse: collapse;
 }
