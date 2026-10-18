@@ -63,7 +63,7 @@ export function stepFrom(model: TableModel, from: CellRef, dRow: number, dCol: n
 	if (dRow < 0) row = span.top - 1;
 	if (dCol > 0) col = span.right + 1;
 	if (dCol < 0) col = span.left - 1;
-	row = clamp(row, 0, model.rowCount - 1);
+	row = clamp(row, 0, model.visibleRowCount - 1);
 	col = clamp(col, 0, model.colCount - 1);
 	return snapToAnchor(model, { row, col });
 }
@@ -160,13 +160,22 @@ export class TableEditor {
 		const token = ++this.renderToken;
 		this.editing = null;
 		this.root.replaceChildren();
-		await renderTable(this.model, this.root, this.options.renderMarkdown);
+		await renderTable(this.model, this.root, this.options.renderMarkdown, () => void this.toggleCollapsed());
 		if (token !== this.renderToken) return;
 		this.paintSelection();
 		if (this.focusAfterRender) {
 			this.focusAfterRender = false;
 			this.focusRoot();
 		}
+	}
+
+	/** Hides or shows the rows below the header, and saves that. */
+	async toggleCollapsed(): Promise<boolean> {
+		if (this.model.headerRows === 0) return false;
+		if (this.editing) await this.commitEdit();
+		return this.applyChange((model) => {
+			model.collapsed = !model.collapsed;
+		});
 	}
 
 	select(cell: CellRef, extend = false): void {
@@ -179,9 +188,9 @@ export class TableEditor {
 	}
 
 	selectAll(): void {
-		if (this.model.rowCount === 0 || this.model.colCount === 0) return;
+		if (this.model.visibleRowCount === 0 || this.model.colCount === 0) return;
 		this.select({ row: 0, col: 0 });
-		this.select({ row: this.model.rowCount - 1, col: this.model.colCount - 1 }, true);
+		this.select({ row: this.model.visibleRowCount - 1, col: this.model.colCount - 1 }, true);
 	}
 
 	clearSelection(): void {
@@ -190,7 +199,7 @@ export class TableEditor {
 	}
 
 	move(dRow: number, dCol: number, extend = false): void {
-		if (this.model.rowCount === 0 || this.model.colCount === 0) return;
+		if (this.model.visibleRowCount === 0 || this.model.colCount === 0) return;
 		if (!this.selection) {
 			this.select({ row: 0, col: 0 });
 			return;
@@ -663,10 +672,10 @@ export class TableEditor {
 	}
 
 	private clampSelection(selection: Selection | null): Selection | null {
-		if (!selection || this.model.rowCount === 0 || this.model.colCount === 0) return null;
+		if (!selection || this.model.visibleRowCount === 0 || this.model.colCount === 0) return null;
 		const fix = (cell: CellRef) =>
 			snapToAnchor(this.model, {
-				row: clamp(cell.row, 0, this.model.rowCount - 1),
+				row: clamp(cell.row, 0, this.model.visibleRowCount - 1),
 				col: clamp(cell.col, 0, this.model.colCount - 1),
 			});
 		return { anchor: fix(selection.anchor), focus: fix(selection.focus) };

@@ -227,3 +227,32 @@ it("produces data that passes validation after every action", () => {
 		expect(reparsed.ok, a.id).toBe(true);
 	}
 });
+
+describe("header actions", () => {
+	it("makes the rows up to the selection the header", () => {
+		const m = grid();
+		expect(enabled("set-header", m, "B2")).toBe(true);
+		run("set-header", m, "B2");
+		expect(m.headerRows).toBe(2);
+		expect(enabled("set-header", m, "A2")).toBe(false);
+	});
+
+	it("is disabled when the header would cut a merge", () => {
+		const m = grid();
+		m.merge(r("A1:A2"));
+		expect(enabled("set-header", m, "B1")).toBe(false);
+	});
+
+	it("removes the header and toggles collapse", () => {
+		const m = grid();
+		expect(enabled("remove-header", m, "A1")).toBe(false);
+		expect(enabled("toggle-collapse", m, "A1")).toBe(false);
+		m.setHeaderRows(1);
+		run("toggle-collapse", m, "A1");
+		expect(m.collapsed).toBe(true);
+		expect(action("toggle-collapse").isChecked!(m, r("A1"))).toBe(true);
+		run("remove-header", m, "A1");
+		expect(m.headerRows).toBe(0);
+		expect(m.collapsed).toBe(false);
+	});
+});

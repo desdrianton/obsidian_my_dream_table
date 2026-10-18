@@ -12,6 +12,7 @@ rows:
   - [Produk, Q1, Q2, Q3]
   - [Laptop, 120, 140, 160]
   - [Mouse, 300, "", ""]
+header: 1
 merges: [B3:D3]
 styles:
   - { range: A1:D1, bg: "#1e3a8a", fg: "#ffffff", bold: true }
@@ -21,6 +22,8 @@ styles:
 
 - **`rows`**: list of rows; each cell is markdown (links, `[[wikilinks]]`, `**bold**`, ...). Short rows are padded with empty cells.
   Images work like anywhere else in Obsidian: `![[photo.png]]`, `![[photo.png|200]]` (no need to escape `|`), or `![](https://…)`. Paste or drop an image onto a cell to save it as an attachment and embed it, or right-click → *Insert image…* to pick one from the vault. Images shrink to fit their column.
+- **`header`**: number of rows at the top that form the header (default `0`, no header). Header cells get the theme's table-header look unless styled otherwise. Right-click → *Make header (rows up to here)* / *Remove header* to set it from the table. A merge may not cross the end of the header.
+- **`collapsed`**: `true` hides every row below the header. Click the chevron in the first header cell (or right-click → *Collapse table*) to toggle it; the state is saved in the note. Needs a `header`.
 - **`merges`**: ranges in A1 notation. Only the top-left cell's content is shown.
 - **`styles`**: rules applied in order; later rules win. Properties:
   - `bg`, `fg`: `#rgb`/`#rrggbb`, color names, `rgb()`/`hsl()`, or theme variables like `var(--color-red)`

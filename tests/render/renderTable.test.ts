@@ -345,3 +345,51 @@ describe("renderErrors", () => {
 		expect(box.querySelector("img")).toBeNull();
 	});
 });
+
+describe("renderTable: header and collapse", () => {
+	it("puts header rows in a thead with a collapse button in the first cell", async () => {
+		const table = await renderTable(
+			model({ rows: [["h"], ["a"], ["b"]], header: 1 }),
+			container,
+			fakeMarkdown,
+		);
+		expect(table.querySelectorAll("thead > tr")).toHaveLength(1);
+		expect(table.querySelectorAll("tbody > tr")).toHaveLength(2);
+		const button = table.querySelector("thead")!.querySelector("td[data-row='0'] > button.dream-table-collapse");
+		expect(button?.getAttribute("aria-expanded")).toBe("true");
+		expect(table.classList.contains("is-collapsed")).toBe(false);
+	});
+
+	it("has no thead or button without a header", async () => {
+		const table = await renderTable(model({ rows: [["a"], ["b"]] }), container, fakeMarkdown);
+		expect(table.querySelector("thead")).toBeNull();
+		expect(table.querySelector(".dream-table-collapse")).toBeNull();
+	});
+
+	it("starts collapsed and toggles on screen without a callback", async () => {
+		const table = await renderTable(
+			model({ rows: [["h"], ["a"]], header: 1, collapsed: true }),
+			container,
+			fakeMarkdown,
+		);
+		const button = table.querySelector<HTMLButtonElement>(".dream-table-collapse")!;
+		expect(table.classList.contains("is-collapsed")).toBe(true);
+		expect(button.getAttribute("aria-expanded")).toBe("false");
+		button.click();
+		expect(table.classList.contains("is-collapsed")).toBe(false);
+		expect(button.getAttribute("aria-expanded")).toBe("true");
+	});
+
+	it("calls the callback instead when given one", async () => {
+		let calls = 0;
+		const table = await renderTable(
+			model({ rows: [["h"], ["a"]], header: 1 }),
+			container,
+			fakeMarkdown,
+			() => calls++,
+		);
+		table.querySelector<HTMLButtonElement>(".dream-table-collapse")!.click();
+		expect(calls).toBe(1);
+		expect(table.classList.contains("is-collapsed")).toBe(false);
+	});
+});

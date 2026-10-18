@@ -14,14 +14,22 @@ export const LINE_HEIGHT_VAR = "--dream-table-line-height";
 export const DEFAULT_COLUMN_WIDTH = 120;
 
 /**
+ * Called when the header's collapse button is clicked. Without it the button
+ * only toggles the table on screen (e.g. for read-only tables).
+ */
+export type ToggleCollapse = () => void;
+
+/**
  * Builds a `<table>` for the model inside `container`. Merged regions become
  * a single cell with rowspan/colspan; cells hidden under a merge are skipped.
- * Resolves once every cell's markdown has rendered.
+ * Header rows go into a `<thead>` whose first cell holds the button that
+ * collapses the body. Resolves once every cell's markdown has rendered.
  */
 export async function renderTable(
 	model: TableModel,
 	container: HTMLElement,
 	renderMarkdown: RenderMarkdown,
+	onToggleCollapse?: ToggleCollapse,
 ): Promise<HTMLTableElement> {
 	const doc = container.ownerDocument;
 	const wrapper = doc.createElement("div");
@@ -36,8 +44,12 @@ export async function renderTable(
 	}
 	table.appendChild(colgroup);
 	applyColumnWidths(table, model.columnWidths);
+	const header = model.headerRows;
+	const thead = header > 0 ? doc.createElement("thead") : null;
 	const tbody = doc.createElement("tbody");
+	if (thead) table.appendChild(thead);
 	table.appendChild(tbody);
+	table.classList.toggle("is-collapsed", header > 0 && model.collapsed);
 	wrapper.appendChild(table);
 	container.appendChild(wrapper);
 
@@ -69,11 +81,47 @@ export async function renderTable(
 			if (content !== "") pending.push(renderMarkdown(preserveBlankLines(content), td));
 			tr.appendChild(td);
 		}
-		tbody.appendChild(tr);
+		(row < header ? thead! : tbody).appendChild(tr);
 	}
 
 	await Promise.all(pending);
+	// Added last so rendering the cell's markdown cannot replace it.
+	const first = thead?.querySelector<HTMLTableCellElement>("td[data-row='0'][data-col='0']");
+	first?.prepend(createCollapseButton(table, onToggleCollapse));
 	return table;
+}
+
+/** Chevron that hides or shows the body rows. */
+function createCollapseButton(table: HTMLTableElement, onToggle?: ToggleCollapse): HTMLButtonElement {
+	const doc = table.ownerDocument;
+	const button = doc.createElement("button");
+	button.type = "button";
+	button.className = `${CLASS_PREFIX}-collapse`;
+	// Focus stays on the table, so its keyboard handling keeps working.
+	button.tabIndex = -1;
+	const sync = () => {
+		const collapsed = table.classList.contains("is-collapsed");
+		button.setAttribute("aria-expanded", String(!collapsed));
+		button.setAttribute("aria-label", collapsed ? "Expand table" : "Collapse table");
+	};
+	sync();
+	// Keep presses from selecting or editing the cell, or moving the note's cursor.
+	const swallow = (evt: Event) => {
+		evt.preventDefault();
+		evt.stopPropagation();
+	};
+	button.addEventListener("mousedown", swallow);
+	button.addEventListener("dblclick", swallow);
+	button.addEventListener("click", (evt) => {
+		swallow(evt);
+		if (onToggle) {
+			onToggle();
+			return;
+		}
+		table.classList.toggle("is-collapsed");
+		sync();
+	});
+	return button;
 }
 
 /**

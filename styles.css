@@ -312,3 +312,58 @@
 	justify-content: space-between;
 	margin-top: var(--size-4-4);
 }
+
+/* --------------------------------------------------------- header, collapse */
+
+.dream-table thead td {
+	background-color: var(--table-header-background);
+	font-weight: var(--table-header-weight);
+	color: var(--table-header-color);
+}
+
+.dream-table.is-collapsed > tbody {
+	display: none;
+}
+
+.dream-table-collapse {
+	float: left;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.4em;
+	height: 1.4em;
+	margin: 0 var(--size-4-1) 0 0;
+	padding: 0;
+	border: none;
+	border-radius: var(--radius-s);
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	cursor: pointer;
+	opacity: 0.7;
+}
+
+.dream-table-collapse:hover {
+	opacity: 1;
+	background-color: var(--background-modifier-hover);
+}
+
+/* Chevron pointing down when expanded, right when collapsed. */
+.dream-table-collapse::before {
+	content: "";
+	width: 0.45em;
+	height: 0.45em;
+	border-right: 2px solid currentColor;
+	border-bottom: 2px solid currentColor;
+	transform: translateY(-20%) rotate(45deg);
+	transition: transform 120ms ease;
+}
+
+.dream-table.is-collapsed .dream-table-collapse::before {
+	transform: rotate(-45deg);
+}
+
+/* The button floats beside the cell's content, so that content needs no gap above it. */
+.dream-table td > .dream-table-collapse + * {
+	margin-top: 0;
+}

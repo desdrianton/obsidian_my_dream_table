@@ -775,3 +775,41 @@ describe("destroy", () => {
 		expect(container.querySelector(".dream-table-editor")).toBeNull();
 	});
 });
+
+describe("collapse", () => {
+	function withHeader(): TableModel {
+		const m = grid();
+		m.setHeaderRows(1);
+		return m;
+	}
+
+	it("saves the toggle from the header button without selecting the cell", async () => {
+		await mount(withHeader());
+		const button = container.querySelector<HTMLButtonElement>(".dream-table-collapse")!;
+		mouse(button, "mousedown");
+		expect(selected()).toBeNull();
+		button.click();
+		await flush();
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect(onChange.mock.calls[0]![0].collapsed).toBe(true);
+		expect(container.querySelector("table")!.classList.contains("is-collapsed")).toBe(true);
+	});
+
+	it("keeps keyboard navigation inside the header while collapsed", async () => {
+		const m = withHeader();
+		m.collapsed = true;
+		await mount(m);
+		editor.select({ row: 0, col: 0 });
+		key(editor.root, "ArrowDown");
+		expect(selected()).toBe("A1");
+		editor.selectAll();
+		expect(selected()).toBe("A1:C1");
+	});
+
+	it("moves a selection out of the hidden rows when collapsing", async () => {
+		await mount(withHeader());
+		editor.select({ row: 2, col: 1 });
+		await editor.toggleCollapsed();
+		expect(selected()).toBe("B1");
+	});
+});

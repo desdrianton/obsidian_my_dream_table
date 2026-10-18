@@ -85,3 +85,15 @@ describe("serializeTable", () => {
 		expect(result.model.toData()).toEqual(model.toData());
 	});
 });
+
+describe("serializeTable: header", () => {
+	it("writes header and collapsed only when set", () => {
+		expect(serializeTable({ version: 1, rows: [["a"]] })).not.toMatch(/header|collapsed/);
+		const text = serializeTable({ version: 1, rows: [["a"], ["b"]], header: 1, collapsed: true });
+		expect(text).toContain("header: 1\ncollapsed: true\n");
+		expect(roundTrip({ version: 1, rows: [["a"], ["b"]], header: 1, collapsed: true })).toMatchObject({
+			header: 1,
+			collapsed: true,
+		});
+	});
+});

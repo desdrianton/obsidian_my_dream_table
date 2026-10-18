@@ -38,6 +38,7 @@ export function createStarterTable(): TableModel {
 	];
 	content.forEach((row, r) => row.forEach((value, c) => model.setCell(r, c, value)));
 	model.merge({ top: 2, left: 1, bottom: 2, right: 3 });
+	model.setHeaderRows(1);
 	model.applyStyle({ top: 0, left: 0, bottom: 0, right: 3 }, {
 		bg: "var(--color-blue)",
 		fg: "#ffffff",

@@ -33,6 +33,10 @@ export interface ParsedTable {
 	border: Border;
 	/** Table-wide default line height, or null for the theme default. */
 	lineHeight: number | null;
+	/** Number of header rows (0 for none). */
+	header: number;
+	/** Whether the body rows are hidden. */
+	collapsed: boolean;
 }
 
 export type ParseResult =
@@ -63,6 +67,8 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
 	"padding",
 	"border",
 	"lineHeight",
+	"header",
+	"collapsed",
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -110,10 +116,21 @@ export function parseTableData(input: unknown): ParseResult {
 		else errors.push(`\`lineHeight\` ${LINE_HEIGHT_ERROR}`);
 	}
 
+	const header = parseHeader(input.header, rows.length, merges, errors);
+	let collapsed = false;
+	if (input.collapsed !== undefined && input.collapsed !== null) {
+		if (typeof input.collapsed !== "boolean") errors.push("`collapsed` must be true or false.");
+		else if (input.collapsed && header === 0) errors.push("`collapsed` needs a `header` to collapse from.");
+		else collapsed = input.collapsed;
+	}
+
 	if (errors.length > 0) {
 		return { ok: false, errors };
 	}
-	return { ok: true, table: { rows, merges, styles, widths, padding, border, lineHeight } };
+	return {
+		ok: true,
+		table: { rows, merges, styles, widths, padding, border, lineHeight, header, collapsed },
+	};
 }
 
 function checkVersion(version: unknown, errors: string[]): void {
@@ -196,6 +213,30 @@ function parseMerges(
 		merges.push(range);
 	});
 	return merges;
+}
+
+function parseHeader(value: unknown, rowCount: number, merges: Range[], errors: string[]): number {
+	if (value === undefined || value === null) return 0;
+	if (!Number.isInteger(value) || (value as number) < 0) {
+		errors.push("`header` must be the number of header rows, e.g. 1.");
+		return 0;
+	}
+	const header = value as number;
+	if (header > rowCount) {
+		errors.push(`\`header\` is ${header} but the table has only ${rowCount} rows.`);
+		return 0;
+	}
+	const crossing = merges.find((m) => mergeCrossesHeader(m, header));
+	if (crossing) {
+		errors.push(`Merge "${formatRange(crossing)}" crosses the end of the header; a merge must be inside or outside it.`);
+		return 0;
+	}
+	return header;
+}
+
+/** True if the merge has rows both in a header of `header` rows and below it. */
+export function mergeCrossesHeader(merge: Range, header: number): boolean {
+	return merge.top < header && merge.bottom >= header;
 }
 
 function parseWidths(value: unknown, colCount: number, errors: string[]): ColumnWidth[] {

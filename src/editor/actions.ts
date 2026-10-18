@@ -11,7 +11,7 @@ export interface TableAction {
 	id: string;
 	title: string;
 	icon: string;
-	section: "merge" | "structure" | "delete" | "format";
+	section: "merge" | "structure" | "header" | "delete" | "format";
 	isEnabled?: (model: TableModel, range: Range) => boolean;
 	isChecked?: (model: TableModel, range: Range) => boolean;
 	run: (model: TableModel, range: Range) => Range | void;
@@ -113,6 +113,41 @@ export const TABLE_ACTIONS: readonly TableAction[] = [
 		isEnabled: (model) => model.hasColumnWidths,
 		run: (model, range) => {
 			model.resetColumnWidths();
+			return range;
+		},
+	},
+	{
+		id: "set-header",
+		title: "Make header (rows up to here)",
+		icon: "panel-top",
+		section: "header",
+		isEnabled: (model, range) =>
+			model.headerRows !== range.bottom + 1 && model.canSetHeaderRows(range.bottom + 1),
+		run: (model, range) => {
+			model.setHeaderRows(range.bottom + 1);
+			return range;
+		},
+	},
+	{
+		id: "remove-header",
+		title: "Remove header",
+		icon: "panel-top-close",
+		section: "header",
+		isEnabled: (model) => model.headerRows > 0,
+		run: (model, range) => {
+			model.setHeaderRows(0);
+			return range;
+		},
+	},
+	{
+		id: "toggle-collapse",
+		title: "Collapse table",
+		icon: "chevrons-down-up",
+		section: "header",
+		isEnabled: (model) => model.headerRows > 0,
+		isChecked: (model) => model.collapsed,
+		run: (model, range) => {
+			model.collapsed = !model.collapsed;
 			return range;
 		},
 	},

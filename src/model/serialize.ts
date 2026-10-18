@@ -12,6 +12,14 @@ export function serializeTable(data: TableData): string {
 		lines.push(`  - [${row.map(quote).join(", ")}]`);
 	}
 
+	if (data.header !== undefined) {
+		lines.push(`header: ${data.header}`);
+	}
+
+	if (data.collapsed) {
+		lines.push("collapsed: true");
+	}
+
 	if (data.merges && data.merges.length > 0) {
 		lines.push(`merges: [${data.merges.map(quote).join(", ")}]`);
 	}

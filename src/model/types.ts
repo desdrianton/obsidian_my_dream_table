@@ -111,4 +111,8 @@ export interface TableData {
 	border?: Border;
 	/** Default line height for every cell; style rules can override it. */
 	lineHeight?: number;
+	/** Number of rows at the top that form the table header. */
+	header?: number;
+	/** Whether the rows below the header are hidden. Needs a header. */
+	collapsed?: boolean;
 }

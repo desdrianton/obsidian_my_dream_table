@@ -16,6 +16,7 @@ import {
 	isValidColor,
 	isValidLineHeight,
 	isValidPadding,
+	mergeCrossesHeader,
 	roundLineHeight,
 	parseTableData,
 	type ParsedTable,
@@ -58,6 +59,8 @@ export class TableModel {
 	private defaultPadding: number | null;
 	private defaultBorder: Border;
 	private defaultLineHeight: number | null;
+	private header: number;
+	private isCollapsed: boolean;
 
 	private constructor(table: ParsedTable) {
 		this.rows = table.rows.map((row) => [...row]);
@@ -70,6 +73,8 @@ export class TableModel {
 		this.defaultPadding = table.padding;
 		this.defaultBorder = { ...table.border };
 		this.defaultLineHeight = table.lineHeight;
+		this.header = table.header;
+		this.isCollapsed = table.collapsed;
 	}
 
 	/** Builds a model from the raw (e.g. YAML-parsed) code block value. */
@@ -85,7 +90,17 @@ export class TableModel {
 		assertCount(colCount, "colCount");
 		const rows = Array.from({ length: rowCount }, () => Array<string>(colCount).fill(""));
 		const widths = Array<ColumnWidth>(colCount).fill(null);
-		return new TableModel({ rows, merges: [], styles: [], widths, padding: null, border: {}, lineHeight: null });
+		return new TableModel({
+			rows,
+			merges: [],
+			styles: [],
+			widths,
+			padding: null,
+			border: {},
+			lineHeight: null,
+			header: 0,
+			collapsed: false,
+		});
 	}
 
 	clone(): TableModel {
@@ -97,6 +112,8 @@ export class TableModel {
 			padding: this.defaultPadding,
 			border: this.defaultBorder,
 			lineHeight: this.defaultLineHeight,
+			header: this.header,
+			collapsed: this.isCollapsed,
 		});
 	}
 
@@ -123,6 +140,8 @@ export class TableModel {
 		if (this.defaultPadding !== null) data.padding = this.defaultPadding;
 		if (Object.keys(this.defaultBorder).length > 0) data.border = { ...this.defaultBorder };
 		if (this.defaultLineHeight !== null) data.lineHeight = this.defaultLineHeight;
+		if (this.header > 0) data.header = this.header;
+		if (this.isCollapsed) data.collapsed = true;
 		return data;
 	}
 
@@ -197,6 +216,9 @@ export class TableModel {
 		this.assertRange(range);
 		if (isSingleCell(range)) {
 			throw new Error("Cannot merge a single cell.");
+		}
+		if (mergeCrossesHeader(range, this.header)) {
+			throw new Error(`Cannot merge across the end of the header (row ${this.header}).`);
 		}
 		const partial = this.mergeList.find(
 			(m) => rangesIntersect(m, range) && !rangeContainsRange(range, m),
@@ -288,6 +310,53 @@ export class TableModel {
 		const reset: CellStyle = {};
 		for (const key of STYLE_KEYS) (reset as Record<string, null>)[key] = null;
 		this.applyStyle(range, reset);
+	}
+
+	// ----------------------------------------------------------------- header
+
+	/** Number of rows at the top that form the header (0 for none). */
+	get headerRows(): number {
+		return this.header;
+	}
+
+	/**
+	 * Makes the first `count` rows the header. Merges may not cross its end,
+	 * since header and body are separate row groups. With no header left,
+	 * the table can no longer be collapsed.
+	 */
+	setHeaderRows(count: number): void {
+		assertIndex(count, this.rowCount, "Header row count");
+		const crossing = this.mergeList.find((m) => mergeCrossesHeader(m, count));
+		if (crossing) {
+			throw new Error(`Merge ${formatRange(crossing)} crosses the end of the header; unmerge it first.`);
+		}
+		this.header = count;
+		if (count === 0) this.isCollapsed = false;
+	}
+
+	/** Whether a header of `count` rows would cut through a merge. */
+	canSetHeaderRows(count: number): boolean {
+		return (
+			Number.isInteger(count) &&
+			count >= 0 &&
+			count <= this.rowCount &&
+			!this.mergeList.some((m) => mergeCrossesHeader(m, count))
+		);
+	}
+
+	/** Whether the rows below the header are hidden. */
+	get collapsed(): boolean {
+		return this.isCollapsed;
+	}
+
+	set collapsed(collapsed: boolean) {
+		if (collapsed && this.header === 0) throw new Error("Only a table with a header can be collapsed.");
+		this.isCollapsed = collapsed;
+	}
+
+	/** Rows shown on screen: just the header while collapsed. */
+	get visibleRowCount(): number {
+		return this.isCollapsed ? this.header : this.rowCount;
 	}
 
 	// -------------------------------------------------------- column widths
@@ -419,6 +488,7 @@ export class TableModel {
 		const newRows = Array.from({ length: count }, () => Array<string>(this.colCount).fill(""));
 		this.rows.splice(index, 0, ...newRows);
 		this.shiftForInsert("row", index, count);
+		if (index < this.header) this.header += count;
 	}
 
 	deleteRows(index: number, count = 1): void {
@@ -427,6 +497,8 @@ export class TableModel {
 		assertIndex(index, this.rowCount - 1, "Row");
 		this.rows.splice(index, count);
 		this.shiftForDelete("row", index, count);
+		this.header -= Math.max(0, Math.min(this.header, index + count) - index);
+		if (this.header === 0) this.isCollapsed = false;
 	}
 
 	insertColumns(index: number, count = 1): void {
