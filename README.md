@@ -4,7 +4,7 @@ Obsidian plugin for complex tables: merged cells, background and text colors, bo
 
 ## Usage
 
-Run the **Dream Table: Insert table** command, or write a `dreamtable` code block:
+Run the **Dream Table: Insert table** command (it asks for the number of rows and columns, 2 × 2 by default, and fills each cell with its position as `row_column`, e.g. `1_1`, `1_2`), or write a `dreamtable` code block:
 
 ````markdown
 ```dreamtable
@@ -75,6 +75,7 @@ Tables are edited where they are, in Live Preview and Reading view; every change
 - *Bold*, *Italic*, *Subscript*, *Superscript*, *Align left/center/right*, *Clear formatting* (Ctrl+B / Ctrl+I also toggle bold / italic on selected cells)
 - *Insert image…*
 - *Background color…*, *Text color…*
+- *Table style…*: ready-made looks in a pastel color or a custom color of your choice. *Header row* colors and bolds the header (making the top row the header if there is none), *Header column* colors and bolds the first column, *Striped rows* colors every second row below the header. They are saved as ordinary `styles` rules, so rows added later are not striped until you apply the style again.
 - *Cell font…*, *Cell font size…*, *Cell padding…*, *Cell line height…*, *Cell border…* (override the table settings for the selected cells)
 - *Table font…*, *Table font size…*, *Table padding…*, *Table line height…*, *Table border…*, *Table height…*, *Table width…*
 

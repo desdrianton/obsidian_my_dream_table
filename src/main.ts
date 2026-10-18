@@ -13,7 +13,14 @@ import {
 	type App,
 	type MarkdownPostProcessorContext,
 } from "obsidian";
-import { CODE_BLOCK_LANGUAGE, createStarterTable, parseCodeBlock, toCodeBlock } from "./codeblock";
+import {
+	CODE_BLOCK_LANGUAGE,
+	createNumberedTable,
+	isValidInsertSize,
+	MAX_INSERT_SIZE,
+	parseCodeBlock,
+	toCodeBlock,
+} from "./codeblock";
 import {
 	isActionEnabled,
 	setBorder,
@@ -26,6 +33,7 @@ import {
 	type TableAction,
 } from "./editor/actions";
 import { buildBorderPicker } from "./editor/borderPicker";
+import { buildPresetPicker } from "./editor/presetPicker";
 import { buildLineHeightPicker, buildPaddingPicker } from "./editor/paddingPicker";
 import { buildMaxHeightPicker, buildMaxWidthPicker } from "./editor/sizePicker";
 import { buildFontFamilyPicker, buildFontSizePicker } from "./editor/fontPicker";
@@ -67,10 +75,12 @@ export default class DreamTablePlugin extends Plugin {
 			id: "insert-table",
 			name: "Insert table",
 			editorCallback: (editor) => {
-				const cursor = editor.getCursor();
-				// Code fences must start on their own line.
-				const prefix = editor.getLine(cursor.line).length > 0 ? "\n" : "";
-				editor.replaceSelection(prefix + toCodeBlock(createStarterTable()));
+				new InsertTableModal(this.app, (rows, cols) => {
+					const cursor = editor.getCursor();
+					// Code fences must start on their own line.
+					const prefix = editor.getLine(cursor.line).length > 0 ? "\n" : "";
+					editor.replaceSelection(prefix + toCodeBlock(createNumberedTable(rows, cols)));
+				}).open();
 			},
 		});
 	}
@@ -452,6 +462,14 @@ class DreamTableView extends MarkdownRenderChild {
 			);
 		colorItem("Background color…", "paint-bucket", "bg", BACKGROUND_SWATCHES);
 		colorItem("Text color…", "palette", "fg", TEXT_SWATCHES);
+		pickerItem("Table style…", "paintbrush", (el, close) =>
+			buildPresetPicker(el, {
+				onPick: (preset, color) => {
+					close();
+					apply((m) => preset.apply(m, color));
+				},
+			}),
+		);
 
 		// Cell-level settings, each overriding the table-level one below.
 		menu.addSeparator();
@@ -619,6 +637,55 @@ class ImageSuggestModal extends FuzzySuggestModal<TFile> {
 
 	override onChooseItem(file: TFile): void {
 		this.onChoose(file);
+	}
+}
+
+/** Asks for the size of a new table, 2 × 2 by default. */
+class InsertTableModal extends Modal {
+	constructor(
+		app: App,
+		private readonly onSubmit: (rows: number, cols: number) => void,
+	) {
+		super(app);
+	}
+
+	override onOpen(): void {
+		this.titleEl.setText("Insert table");
+		const form = this.contentEl.createEl("form", { cls: "dream-table-insert-form" });
+		const field = (label: string) => {
+			const wrapper = form.createEl("label", { cls: "dream-table-insert-field", text: label });
+			return wrapper.createEl("input", {
+				type: "number",
+				value: "2",
+				attr: { min: "1", max: String(MAX_INSERT_SIZE), step: "1" },
+			});
+		};
+		const rows = field("Rows");
+		form.createSpan({ cls: "dream-table-insert-times", text: "×" });
+		const cols = field("Columns");
+		form.createEl("button", { type: "submit", text: "Insert", cls: "mod-cta" });
+
+		form.addEventListener("submit", (evt) => {
+			evt.preventDefault();
+			const read = (input: HTMLInputElement) => {
+				const value = input.value.trim() === "" ? Number.NaN : Number(input.value);
+				const valid = isValidInsertSize(value);
+				input.classList.toggle("is-invalid", !valid);
+				input.setAttribute("aria-invalid", String(!valid));
+				return valid ? value : null;
+			};
+			const rowCount = read(rows);
+			const colCount = read(cols);
+			if (rowCount === null || colCount === null) return;
+			this.close();
+			this.onSubmit(rowCount, colCount);
+		});
+		rows.focus();
+		rows.select();
+	}
+
+	override onClose(): void {
+		this.contentEl.empty();
 	}
 }
 

@@ -2,7 +2,8 @@ import { load } from "js-yaml";
 import { describe, expect, it } from "vitest";
 import {
 	CODE_BLOCK_LANGUAGE,
-	createStarterTable,
+	createNumberedTable,
+	isValidInsertSize,
 	parseCodeBlock,
 	toCodeBlock,
 } from "../src/codeblock";
@@ -53,7 +54,8 @@ describe("parseCodeBlock", () => {
 
 describe("toCodeBlock", () => {
 	it("wraps the table in a fenced block that parses back to the same table", () => {
-		const model = createStarterTable();
+		const model = createNumberedTable(2, 3);
+		model.merge({ top: 0, left: 1, bottom: 0, right: 2 });
 		const block = toCodeBlock(model);
 
 		expect(block.startsWith("```" + CODE_BLOCK_LANGUAGE + "\n")).toBe(true);
@@ -66,11 +68,23 @@ describe("toCodeBlock", () => {
 	});
 });
 
-describe("createStarterTable", () => {
-	it("showcases merges and styles", () => {
-		const model = createStarterTable();
-		expect(model.merges).toHaveLength(1);
-		expect(model.getStyle(0, 0)).toMatchObject({ bold: true, align: "center" });
-		expect(model.getStyle(2, 1)).toMatchObject({ align: "center", italic: true });
+describe("createNumberedTable", () => {
+	it("fills each cell with its row and column number", () => {
+		const model = createNumberedTable(2, 3);
+		expect(model.toData().rows).toEqual([
+			["1_1", "1_2", "1_3"],
+			["2_1", "2_2", "2_3"],
+		]);
+	});
+});
+
+describe("isValidInsertSize", () => {
+	it("accepts whole numbers from 1 to the maximum", () => {
+		expect(isValidInsertSize(1)).toBe(true);
+		expect(isValidInsertSize(100)).toBe(true);
+		expect(isValidInsertSize(0)).toBe(false);
+		expect(isValidInsertSize(101)).toBe(false);
+		expect(isValidInsertSize(2.5)).toBe(false);
+		expect(isValidInsertSize(Number.NaN)).toBe(false);
 	});
 });

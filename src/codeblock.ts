@@ -27,26 +27,22 @@ export function toCodeBlock(model: TableModel): string {
 	return "```" + CODE_BLOCK_LANGUAGE + "\n" + serializeTable(model.toData()) + "```\n";
 }
 
-/** Starter table used by the "Insert table" command. */
-export function createStarterTable(): TableModel {
-	const model = TableModel.create(4, 4);
-	const content = [
-		["Produk", "Q1", "Q2", "Q3"],
-		["Laptop", "120", "140", "160"],
-		["Mouse", "300", "", ""],
-		["**Total**", "420", "140", "160"],
-	];
-	content.forEach((row, r) => row.forEach((value, c) => model.setCell(r, c, value)));
-	model.merge({ top: 2, left: 1, bottom: 2, right: 3 });
-	model.setHeaderRows(1);
-	model.applyStyle({ top: 0, left: 0, bottom: 0, right: 3 }, {
-		bg: "var(--color-blue)",
-		fg: "#ffffff",
-		bold: true,
-		align: "center",
-	});
-	model.applyStyle({ top: 1, left: 1, bottom: 3, right: 3 }, { align: "right" });
-	model.applyStyle({ top: 2, left: 1, bottom: 2, right: 3 }, { align: "center", italic: true });
-	model.applyStyle({ top: 3, left: 0, bottom: 3, right: 3 }, { bg: "var(--background-secondary)" });
+/** Largest row or column count the "Insert table" dialog accepts. */
+export const MAX_INSERT_SIZE = 100;
+
+/** Whether `count` is a usable row or column count for a new table. */
+export function isValidInsertSize(count: number): boolean {
+	return Number.isInteger(count) && count >= 1 && count <= MAX_INSERT_SIZE;
+}
+
+/**
+ * Table used by the "Insert table" command. Each cell holds its own
+ * 1-based position as `row_column`, e.g. `1_1`, `1_2`.
+ */
+export function createNumberedTable(rowCount: number, colCount: number): TableModel {
+	const model = TableModel.create(rowCount, colCount);
+	for (let r = 0; r < rowCount; r++) {
+		for (let c = 0; c < colCount; c++) model.setCell(r, c, `${r + 1}_${c + 1}`);
+	}
 	return model;
 }

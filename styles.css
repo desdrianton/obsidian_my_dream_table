@@ -238,6 +238,20 @@
 	outline-offset: 2px;
 }
 
+.dream-table-preset + .dream-table-preset {
+	margin-top: var(--size-4-3);
+}
+
+.dream-table-preset-custom {
+	display: block;
+	margin-top: var(--size-4-2);
+}
+
+.dream-table-preset-title {
+	margin-bottom: var(--size-4-1);
+	font-weight: var(--font-semibold);
+}
+
 .dream-table-color-footer {
 	display: flex;
 	align-items: center;
@@ -285,6 +299,33 @@
 
 .dream-table-value-custom input.is-invalid {
 	border-color: var(--background-modifier-error);
+}
+
+/* ------------------------------------------------------ insert table dialog */
+
+.dream-table-insert-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.dream-table-insert-field {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.dream-table-insert-field input {
+	width: 5em;
+}
+
+.dream-table-insert-field input.is-invalid {
+	border-color: var(--background-modifier-error);
+}
+
+.dream-table-insert-form button {
+	margin-left: auto;
 }
 
 /* ---------------------------------------------------------- border picker */
