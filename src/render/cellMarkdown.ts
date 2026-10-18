@@ -41,3 +41,38 @@ export function preserveBlankLines(markdown: string): string {
 	}
 	return out.join("\n");
 }
+
+/** A task list item: list marker (optionally quoted), then `[c]` and a space or line end. */
+const TASK = /^(\s*(?:>\s*)*(?:[-*+]|\d+[.)])\s+\[)(.)(\](?:\s|$))/;
+
+/**
+ * Checks or unchecks the `index`-th task (counted in document order, as the
+ * rendered checkboxes are) and returns the new markdown. Tasks inside fenced
+ * code blocks are not counted, since they render as code. Returns the
+ * markdown unchanged when there is no such task.
+ */
+export function setTaskChecked(markdown: string, index: number, checked: boolean): string {
+	const lines = markdown.split("\n");
+	let fence: string | null = null;
+	let count = 0;
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i]!;
+		const fenceMatch = FENCE.exec(line);
+		if (fence !== null) {
+			if (fenceMatch && fenceMatch[1]![0] === fence[0] && fenceMatch[1]!.length >= fence.length) {
+				fence = null;
+			}
+			continue;
+		}
+		if (fenceMatch) {
+			fence = fenceMatch[1]!;
+			continue;
+		}
+		if (!TASK.test(line)) continue;
+		if (count++ !== index) continue;
+		lines[i] = line.replace(TASK, (_, before: string, _mark: string, after: string) => before + (checked ? "x" : " ") + after);
+		return lines.join("\n");
+	}
+	return markdown;
+}

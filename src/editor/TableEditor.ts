@@ -3,6 +3,7 @@ import { rangeContainsCell } from "../model/range";
 import type { TableModel } from "../model/TableModel";
 import type { CellRef, Range } from "../model/types";
 import { appendToCell, imageFilesFrom } from "../images";
+import { setTaskChecked } from "../render/cellMarkdown";
 import { applyColumnWidths, renderTable, type RenderMarkdown } from "../render/renderTable";
 import { clearContent, TABLE_ACTIONS } from "./actions";
 import {
@@ -126,6 +127,7 @@ export class TableEditor {
 		this.root.addEventListener("mouseover", this.onMouseOver);
 		this.root.addEventListener("mousemove", this.onHover);
 		this.root.addEventListener("mouseleave", () => this.root.classList.remove("is-resize-hover"));
+		this.root.addEventListener("click", this.onClick);
 		this.root.addEventListener("dblclick", this.onDoubleClick);
 		this.root.addEventListener("contextmenu", this.onContextMenu);
 		this.root.addEventListener("keydown", this.onKeyDown);
@@ -467,6 +469,26 @@ export class TableEditor {
 	private tableElement(): HTMLTableElement | null {
 		return this.root.querySelector<HTMLTableElement>("table.dream-table");
 	}
+
+	/** Ticking a rendered task checkbox saves the change to the cell's markdown. */
+	private readonly onClick = (evt: MouseEvent) => {
+		const target = evt.target as HTMLInputElement | null;
+		if (target?.tagName !== "INPUT" || target.type !== "checkbox") return;
+		const cell = this.cellFromEvent(evt);
+		const td = target.closest("td[data-row]");
+		if (!cell || !td || this.editing) return;
+		// The browser has already flipped `checked`; the re-render shows it from
+		// the saved markdown instead. Keep the note's editor from acting on it too.
+		evt.preventDefault();
+		evt.stopPropagation();
+		const index = Array.from(td.querySelectorAll("input[type=checkbox]")).indexOf(target);
+		const content = this.model.getCell(cell.row, cell.col);
+		const next = setTaskChecked(content, index, target.checked);
+		if (next === content) return;
+		void this.applyChange((model) => {
+			model.setCell(cell.row, cell.col, next);
+		});
+	};
 
 	private readonly onDoubleClick = (evt: MouseEvent) => {
 		const cell = this.cellFromEvent(evt);

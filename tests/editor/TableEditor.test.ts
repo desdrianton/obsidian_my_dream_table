@@ -913,3 +913,43 @@ describe("leaving with arrow keys", () => {
 		expect(selected()).toBe("A1");
 	});
 });
+
+describe("task checkboxes", () => {
+	/** Renders each `- [ ]` / `- [x]` line as a checkbox, like Obsidian does. */
+	const withCheckboxes: RenderMarkdown = async (markdown, el) => {
+		for (const line of markdown.split("\n")) {
+			const match = /^- \[(.)\]/.exec(line);
+			if (!match) continue;
+			const box = document.createElement("input");
+			box.type = "checkbox";
+			box.checked = match[1] !== " ";
+			el.appendChild(box);
+		}
+	};
+
+	function boxes(address: string): HTMLInputElement[] {
+		return Array.from(td(address).querySelectorAll<HTMLInputElement>("input[type=checkbox]"));
+	}
+
+	it("saves a ticked checkbox to the cell", async () => {
+		const model = TableModel.create(1, 1);
+		model.setCell(0, 0, "- [ ] a\n- [ ] b");
+		await mount(model, { renderMarkdown: withCheckboxes });
+
+		mouse(boxes("A1")[1]!, "click");
+		await flush();
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect(editor.currentModel.getCell(0, 0)).toBe("- [ ] a\n- [x] b");
+		expect(boxes("A1").map((b) => b.checked)).toEqual([false, true]);
+	});
+
+	it("saves an unticked checkbox to the cell", async () => {
+		const model = TableModel.create(1, 1);
+		model.setCell(0, 0, "- [x] a");
+		await mount(model, { renderMarkdown: withCheckboxes });
+
+		mouse(boxes("A1")[0]!, "click");
+		await flush();
+		expect(editor.currentModel.getCell(0, 0)).toBe("- [ ] a");
+	});
+});

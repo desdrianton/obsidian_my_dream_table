@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preserveBlankLines } from "../../src/render/cellMarkdown";
+import { preserveBlankLines, setTaskChecked } from "../../src/render/cellMarkdown";
 
 const BLANK = "\n\n&nbsp;\n\n";
 
@@ -54,5 +54,30 @@ describe("preserveBlankLines", () => {
 	it("treats an unclosed fence as code to the end", () => {
 		const code = "```\na\n\nb";
 		expect(preserveBlankLines(code)).toBe(code);
+	});
+});
+
+describe("setTaskChecked", () => {
+	it("checks and unchecks the task at the index", () => {
+		expect(setTaskChecked("- [ ] a\n- [ ] b", 1, true)).toBe("- [ ] a\n- [x] b");
+		expect(setTaskChecked("- [x] a\n- [X] b", 1, false)).toBe("- [x] a\n- [ ] b");
+	});
+
+	it("handles other list markers, nesting and quotes", () => {
+		expect(setTaskChecked("* [ ] a", 0, true)).toBe("* [x] a");
+		expect(setTaskChecked("1. [ ] a", 0, true)).toBe("1. [x] a");
+		expect(setTaskChecked("- a\n\t- [ ] b", 0, true)).toBe("- a\n\t- [x] b");
+		expect(setTaskChecked("> - [ ] a", 0, true)).toBe("> - [x] a");
+		expect(setTaskChecked("- [/] a", 0, false)).toBe("- [ ] a");
+	});
+
+	it("skips text that is not a task, and tasks in code blocks", () => {
+		const md = "[ ] not a task\n```\n- [ ] code\n```\n- [ ] real";
+		expect(setTaskChecked(md, 0, true)).toBe("[ ] not a task\n```\n- [ ] code\n```\n- [x] real");
+	});
+
+	it("leaves the markdown alone when there is no such task", () => {
+		expect(setTaskChecked("- [ ] a", 3, true)).toBe("- [ ] a");
+		expect(setTaskChecked("text", 0, true)).toBe("text");
 	});
 });
