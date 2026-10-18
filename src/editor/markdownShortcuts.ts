@@ -144,3 +144,35 @@ export function applyToTextarea(textarea: HTMLTextAreaElement, edit: TextEdit): 
 	textarea.setSelectionRange(edit.selectionStart, edit.selectionEnd);
 	textarea.dispatchEvent(new Event("input", { bubbles: true }));
 }
+
+const INDENT = "\t";
+const SPACES_PER_INDENT = 4;
+
+/**
+ * Indents (or with `outdent`, unindents) every line touched by the
+ * selection, like Tab in Obsidian's editor. Lines that cannot be unindented
+ * further are left as they are.
+ */
+export function indentLines(state: TextState, outdent: boolean): TextEdit {
+	const { text, start, end } = state;
+	const from = text.lastIndexOf("\n", start - 1) + 1;
+	// A selection ending at the start of a line does not include that line.
+	const last = end > start && text[end - 1] === "\n" ? end - 1 : end;
+	const lineEnd = text.indexOf("\n", last);
+	const to = lineEnd === -1 ? text.length : lineEnd;
+	const lines = text.slice(from, to).split("\n");
+
+	const changed = lines.map((line) => {
+		// Blank lines inside a multi-line selection stay blank.
+		if (!outdent) return line === "" && lines.length > 1 ? line : INDENT + line;
+		if (line.startsWith(INDENT)) return line.slice(INDENT.length);
+		return line.replace(new RegExp(`^ {1,${SPACES_PER_INDENT}}`), "");
+	});
+	const insert = changed.join("\n");
+
+	const firstDelta = changed[0]!.length - lines[0]!.length;
+	const totalDelta = insert.length - (to - from);
+	const selectionStart = Math.max(from, start + firstDelta);
+	const selectionEnd = start === end ? selectionStart : Math.max(selectionStart, end + totalDelta);
+	return { from, to, insert, selectionStart, selectionEnd };
+}

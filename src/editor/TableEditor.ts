@@ -5,7 +5,14 @@ import type { CellRef, Range } from "../model/types";
 import { appendToCell, imageFilesFrom } from "../images";
 import { applyColumnWidths, renderTable, type RenderMarkdown } from "../render/renderTable";
 import { clearContent, TABLE_ACTIONS } from "./actions";
-import { applyToTextarea, insertLink, toggleMarker, type TextEdit, type TextState } from "./markdownShortcuts";
+import {
+	applyToTextarea,
+	indentLines,
+	insertLink,
+	toggleMarker,
+	type TextEdit,
+	type TextState,
+} from "./markdownShortcuts";
 import { hitColumnEdge, measureColumnWidths, resizedWidths, startingWidths } from "./resize";
 
 export interface Selection {
@@ -556,7 +563,10 @@ export class TableEditor {
 			void this.commitEdit(1, 0);
 		} else if (evt.key === "Tab") {
 			evt.preventDefault();
-			void this.commitEdit(0, evt.shiftKey ? -1 : 1);
+			const input = evt.currentTarget as HTMLTextAreaElement;
+			const state = { text: input.value, start: input.selectionStart, end: input.selectionEnd };
+			const edit = indentLines(state, evt.shiftKey);
+			if (edit.insert !== state.text.slice(edit.from, edit.to)) applyToTextarea(input, edit);
 		} else if (evt.key === "Escape") {
 			evt.preventDefault();
 			this.cancelEdit();

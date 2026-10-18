@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	applyTextEdit,
 	applyToTextarea,
+	indentLines,
 	insertLink,
 	toggleMarker,
 	type TextEdit,
@@ -122,5 +123,37 @@ describe("applyToTextarea", () => {
 		expect(textarea.value).toBe("say **hello**");
 		expect([textarea.selectionStart, textarea.selectionEnd]).toEqual([6, 11]);
 		expect(inputs).toBe(1);
+	});
+});
+
+const indent = (s: string) => run(s, (state) => indentLines(state, false)!);
+const outdent = (s: string) => run(s, (state) => indentLines(state, true)!);
+
+describe("indentLines", () => {
+	it("indents a list item and keeps the cursor on its text", () => {
+		expect(indent("- a\n- b|")).toBe("- a\n\t- b|");
+		expect(indent("1. o|ne")).toBe("\t1. o|ne");
+	});
+
+	it("unindents tabs or up to four spaces", () => {
+		expect(outdent("\t- b|")).toBe("- b|");
+		expect(outdent("      - b|")).toBe("  - b|");
+	});
+
+	it("leaves lines that cannot be unindented", () => {
+		expect(outdent("- b|")).toBe("- b|");
+	});
+
+	it("indents every selected line except empty ones", () => {
+		expect(indent("[one\n\ntwo]")).toBe("\t[one\n\n\ttwo]");
+	});
+
+	it("does not include a line the selection only reaches the start of", () => {
+		expect(indent("[- a\n]- b")).toBe("\t[- a\n]- b");
+	});
+
+	it("indents plain text too", () => {
+		expect(indent("pl|ain")).toBe("\tpl|ain");
+		expect(indent("|")).toBe("\t|");
 	});
 });

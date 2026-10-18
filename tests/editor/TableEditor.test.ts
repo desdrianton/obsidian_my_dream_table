@@ -263,16 +263,6 @@ describe("editing cells", () => {
 		expect(editor.isEditing).toBe(true);
 	});
 
-	it("commits with Tab and moves right", async () => {
-		await mount(grid());
-		mouse(td("A1"), "dblclick");
-		input().value = "x";
-		key(input(), "Tab");
-		await flush();
-		expect(editor.currentModel.getCell(0, 0)).toBe("x");
-		expect(selected()).toBe("B1");
-	});
-
 	it("cancels with Escape without saving", async () => {
 		await mount(grid());
 		mouse(td("A1"), "dblclick");
