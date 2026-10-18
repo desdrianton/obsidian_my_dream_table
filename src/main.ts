@@ -26,6 +26,8 @@ import { renderErrors, renderTable, type RenderMarkdown } from "./render/renderT
 import { applyLineEdit, bodyLineCount, planBodyEdit, type BlockLocation } from "./writeback";
 import { findScrollContainer, holdScrollPosition } from "./scroll";
 import { attachmentName, isImageExtension, toEmbed } from "./images";
+import { enterTableExtension, type TableEntry } from "./enterTable";
+import type { EditorView } from "@codemirror/view";
 
 /** How long a saved editor state waits for the re-rendered table to pick it up. */
 const STATE_HANDOFF_MS = 3000;
@@ -37,11 +39,14 @@ export default class DreamTablePlugin extends Plugin {
 	 * note and block position, so the new view can restore it.
 	 */
 	private readonly handoff = new Map<string, { state: EditorState; at: number }>();
+	/** Rendered tables, so the note's cursor can hand focus to one. */
+	readonly tables = new Set<DreamTableView>();
 
 	override async onload(): Promise<void> {
 		this.registerMarkdownCodeBlockProcessor(CODE_BLOCK_LANGUAGE, (source, el, ctx) => {
 			ctx.addChild(new DreamTableView(this, source, el, ctx));
 		});
+		this.registerEditorExtension(enterTableExtension((view, entry) => this.focusTable(view, entry)));
 
 		this.addCommand({
 			id: "insert-table",
@@ -53,6 +58,21 @@ export default class DreamTablePlugin extends Plugin {
 				editor.replaceSelection(prefix + toCodeBlock(createStarterTable()));
 			},
 		});
+	}
+
+	/** Focuses the table rendered for the block at `entry` in a note editor. */
+	private focusTable(view: EditorView, entry: TableEntry): boolean {
+		for (const table of this.tables) {
+			if (!view.contentDOM.contains(table.containerEl)) continue;
+			let pos: number;
+			try {
+				pos = view.posAtDOM(table.containerEl);
+			} catch {
+				continue;
+			}
+			if (pos >= entry.from && pos <= entry.to) return table.enter(entry.side);
+		}
+		return false;
 	}
 
 	parkState(key: string, state: EditorState): void {
@@ -158,6 +178,7 @@ class DreamTableView extends MarkdownRenderChild {
 	}
 
 	override onload(): void {
+		this.plugin.tables.add(this);
 		const result = parseCodeBlock(this.source, parseYaml);
 		if (!result.ok) {
 			renderErrors(this.containerEl, result.errors);
@@ -190,9 +211,15 @@ class DreamTableView extends MarkdownRenderChild {
 	}
 
 	override onunload(): void {
+		this.plugin.tables.delete(this);
 		this.editor?.destroy();
 		this.editor = null;
 		this.setScopeActive(false);
+	}
+
+	/** Gives the table keyboard focus, arriving from the note's cursor. */
+	enter(side: "before" | "after"): boolean {
+		return this.editor?.enter(side) ?? false;
 	}
 
 	/**

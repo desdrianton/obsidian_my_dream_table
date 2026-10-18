@@ -953,3 +953,16 @@ describe("task checkboxes", () => {
 		expect(editor.currentModel.getCell(0, 0)).toBe("- [ ] a");
 	});
 });
+
+describe("entering from the note", () => {
+	it("selects the first or last cell and takes focus", async () => {
+		const m = grid();
+		m.merge(r("B3:C3"));
+		await mount(m);
+		expect(editor.enter("before")).toBe(true);
+		expect(selected()).toBe("A1");
+		expect(document.activeElement).toBe(editor.root);
+		expect(editor.enter("after")).toBe(true);
+		expect(selected()).toBe("B3:C3");
+	});
+});

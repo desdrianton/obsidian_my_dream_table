@@ -222,6 +222,22 @@ export class TableEditor {
 		this.paintSelection();
 	}
 
+	/**
+	 * Takes keyboard focus from the host's cursor arriving at the table:
+	 * selects the first cell when coming from before it, the last cell when
+	 * coming from after. Returns false if the table has no cells.
+	 */
+	enter(side: "before" | "after"): boolean {
+		if (this.model.visibleRowCount === 0 || this.model.colCount === 0) return false;
+		this.select(
+			side === "before"
+				? { row: 0, col: 0 }
+				: { row: this.model.visibleRowCount - 1, col: this.model.colCount - 1 },
+		);
+		this.focusRoot();
+		return true;
+	}
+
 	move(dRow: number, dCol: number, extend = false): void {
 		if (this.model.visibleRowCount === 0 || this.model.colCount === 0) return;
 		if (!this.selection) {
