@@ -20,6 +20,22 @@ export function serializeTable(data: TableData): string {
 		lines.push("collapsed: true");
 	}
 
+	if (data.freezeRows !== undefined) {
+		lines.push(`freezeRows: ${data.freezeRows}`);
+	}
+
+	if (data.freezeCols !== undefined) {
+		lines.push(`freezeCols: ${data.freezeCols}`);
+	}
+
+	if (data.maxHeight !== undefined) {
+		lines.push(`maxHeight: ${data.maxHeight}`);
+	}
+
+	if (data.maxWidth !== undefined) {
+		lines.push(`maxWidth: ${data.maxWidth}`);
+	}
+
 	if (data.merges && data.merges.length > 0) {
 		lines.push(`merges: [${data.merges.map(quote).join(", ")}]`);
 	}

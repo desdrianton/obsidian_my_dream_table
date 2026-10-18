@@ -310,3 +310,17 @@ describe("header actions", () => {
 		expect(m.collapsed).toBe(false);
 	});
 });
+
+describe("freeze", () => {
+	it("freezes rows and columns up to the selection, and unfreezes both", () => {
+		const m = grid();
+		expect(enabled("unfreeze", m, "B2")).toBe(false);
+		run("freeze-rows", m, "B2:C2");
+		run("freeze-cols", m, "A1");
+		expect([m.freezeRows, m.freezeCols]).toEqual([2, 1]);
+		expect(enabled("freeze-rows", m, "A2")).toBe(false);
+		expect(enabled("freeze-cols", m, "A3")).toBe(false);
+		run("unfreeze", m, "A1");
+		expect([m.freezeRows, m.freezeCols]).toEqual([0, 0]);
+	});
+});

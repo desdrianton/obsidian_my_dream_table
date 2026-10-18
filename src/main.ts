@@ -27,6 +27,7 @@ import {
 } from "./editor/actions";
 import { buildBorderPicker } from "./editor/borderPicker";
 import { buildLineHeightPicker, buildPaddingPicker } from "./editor/paddingPicker";
+import { buildMaxHeightPicker, buildMaxWidthPicker } from "./editor/sizePicker";
 import { buildFontFamilyPicker, buildFontSizePicker } from "./editor/fontPicker";
 import { BACKGROUND_SWATCHES, buildColorPicker, TEXT_SWATCHES, type Swatch } from "./editor/colorPicker";
 import { SHORTCUT_KEYS, TableEditor, type EditorState } from "./editor/TableEditor";
@@ -541,6 +542,30 @@ class DreamTableView extends MarkdownRenderChild {
 				},
 			});
 		});
+		pickerItem("Table height…", "move-vertical", (el, close) =>
+			buildMaxHeightPicker(el, {
+				current: model.maxHeight,
+				resetLabel: "Automatic",
+				onPick: (height) => {
+					close();
+					apply((m) => {
+						m.maxHeight = height;
+					});
+				},
+			}),
+		);
+		pickerItem("Table width…", "move-horizontal", (el, close) =>
+			buildMaxWidthPicker(el, {
+				current: model.maxWidth,
+				resetLabel: "Automatic",
+				onPick: (width) => {
+					close();
+					apply((m) => {
+						m.maxWidth = width;
+					});
+				},
+			}),
+		);
 
 		menu.showAtMouseEvent(evt);
 	}

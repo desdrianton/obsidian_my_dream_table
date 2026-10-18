@@ -11,7 +11,7 @@ export interface TableAction {
 	id: string;
 	title: string;
 	icon: string;
-	section: "merge" | "structure" | "header" | "delete" | "format";
+	section: "merge" | "structure" | "header" | "freeze" | "delete" | "format";
 	isEnabled?: (model: TableModel, range: Range) => boolean;
 	isChecked?: (model: TableModel, range: Range) => boolean;
 	run: (model: TableModel, range: Range) => Range | void;
@@ -171,6 +171,40 @@ export const TABLE_ACTIONS: readonly TableAction[] = [
 		isChecked: (model) => model.collapsed,
 		run: (model, range) => {
 			model.collapsed = !model.collapsed;
+			return range;
+		},
+	},
+	{
+		id: "freeze-rows",
+		title: "Freeze rows up to here",
+		icon: "lock",
+		section: "freeze",
+		isEnabled: (model, range) => model.freezeRows !== range.bottom + 1,
+		run: (model, range) => {
+			model.freezeRows = range.bottom + 1;
+			return range;
+		},
+	},
+	{
+		id: "freeze-cols",
+		title: "Freeze columns up to here",
+		icon: "lock",
+		section: "freeze",
+		isEnabled: (model, range) => model.freezeCols !== range.right + 1,
+		run: (model, range) => {
+			model.freezeCols = range.right + 1;
+			return range;
+		},
+	},
+	{
+		id: "unfreeze",
+		title: "Unfreeze rows and columns",
+		icon: "lock-open",
+		section: "freeze",
+		isEnabled: (model) => model.freezeRows > 0 || model.freezeCols > 0,
+		run: (model, range) => {
+			model.freezeRows = 0;
+			model.freezeCols = 0;
 			return range;
 		},
 	},

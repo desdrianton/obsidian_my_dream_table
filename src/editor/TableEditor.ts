@@ -28,6 +28,8 @@ export interface EditorState {
 	selection: Selection | null;
 	/** Whether the table had keyboard focus, so a re-created editor can take it back. */
 	focused?: boolean;
+	/** How far the table's own box was scrolled (wide tables, frozen rows). */
+	scroll?: { top: number; left: number };
 }
 
 export interface TableEditorOptions {
@@ -106,6 +108,7 @@ export class TableEditor {
 	private renderToken = 0;
 	private hasFocus = false;
 	private focusAfterRender: boolean;
+	private scrollAfterRender: { top: number; left: number } | null;
 	private readonly doc: Document;
 
 	constructor(
@@ -121,6 +124,7 @@ export class TableEditor {
 		container.appendChild(this.root);
 
 		this.focusAfterRender = options.initialState?.focused === true;
+		this.scrollAfterRender = options.initialState?.scroll ?? null;
 		const initial = options.initialState?.selection;
 		if (initial && this.inBounds(initial.anchor) && this.inBounds(initial.focus)) {
 			this.selection = this.clampSelection(copySelection(initial));
@@ -167,7 +171,20 @@ export class TableEditor {
 
 	get state(): EditorState {
 		const selection = this.selection && copySelection(this.selection);
-		return { selection, focused: this.root.contains(this.doc.activeElement) };
+		const state: EditorState = { selection, focused: this.root.contains(this.doc.activeElement) };
+		const scroll = this.scrollPosition();
+		if (scroll) state.scroll = scroll;
+		return state;
+	}
+
+	private get wrapper(): HTMLElement | null {
+		return this.root.querySelector<HTMLElement>(".dream-table-wrapper");
+	}
+
+	private scrollPosition(): { top: number; left: number } | null {
+		const wrapper = this.wrapper;
+		if (!wrapper || (wrapper.scrollTop === 0 && wrapper.scrollLeft === 0)) return null;
+		return { top: wrapper.scrollTop, left: wrapper.scrollLeft };
 	}
 
 	get isEditing(): boolean {
@@ -194,9 +211,16 @@ export class TableEditor {
 	async render(): Promise<void> {
 		const token = ++this.renderToken;
 		this.editing = null;
+		const scroll = this.scrollPosition() ?? this.scrollAfterRender;
+		this.scrollAfterRender = null;
 		this.root.replaceChildren();
 		await renderTable(this.model, this.root, this.options.renderMarkdown, () => void this.toggleCollapsed());
 		if (token !== this.renderToken) return;
+		const wrapper = this.wrapper;
+		if (scroll && wrapper) {
+			wrapper.scrollTop = scroll.top;
+			wrapper.scrollLeft = scroll.left;
+		}
 		this.paintSelection();
 		if (this.focusAfterRender) {
 			this.focusAfterRender = false;

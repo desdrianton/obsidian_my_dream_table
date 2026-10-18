@@ -440,3 +440,71 @@ describe("renderTable: header and collapse", () => {
 		expect(table.classList.contains("is-collapsed")).toBe(false);
 	});
 });
+
+describe("renderTable: frozen rows and columns", () => {
+	it("marks cells inside the frozen rows and columns", async () => {
+		const table = await renderTable(
+			model({ rows: [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"]], freezeRows: 1, freezeCols: 1, merges: ["B2:C3"] }),
+			container,
+			fakeMarkdown,
+		);
+		const classes = (address: string) => {
+			const [row, col] = address.split(",");
+			const td = table.querySelector(`td[data-row='${row}'][data-col='${col}']`)!;
+			return ["is-frozen-row", "is-frozen-col"].filter((c) => td.classList.contains(c));
+		};
+		expect(classes("0,0")).toEqual(["is-frozen-row", "is-frozen-col"]);
+		expect(classes("0,1")).toEqual(["is-frozen-row"]);
+		expect(classes("1,0")).toEqual(["is-frozen-col"]);
+		expect(classes("1,1")).toEqual([]);
+		expect(table.parentElement!.classList.contains("has-frozen-rows")).toBe(true);
+		expect(table.querySelector<HTMLElement>("td[data-row='0'][data-col='1']")!.style.top).toBe("0px");
+	});
+
+	it("leaves a merge that reaches past the frozen area scrolling", async () => {
+		const table = await renderTable(
+			model({ rows: [["a", "b"], ["c", "d"]], freezeRows: 1, freezeCols: 1, merges: ["A1:A2"] }),
+			container,
+			fakeMarkdown,
+		);
+		const td = table.querySelector("td[data-row='0'][data-col='0']")!;
+		expect(td.classList.contains("is-frozen-row")).toBe(false);
+		expect(td.classList.contains("is-frozen-col")).toBe(true);
+	});
+
+	it("lays a frozen cell's own background over an opaque one", async () => {
+		const table = await renderTable(
+			model({ rows: [["a", "b"]], freezeCols: 1, styles: [{ range: "A1:B1", bg: "rgba(255, 0, 0, 0.2)" }] }),
+			container,
+			fakeMarkdown,
+		);
+		const [frozen, scrolling] = Array.from(table.querySelectorAll<HTMLElement>("td"));
+		expect(frozen!.style.backgroundColor).toBe("");
+		expect(frozen!.style.getPropertyValue("--dream-table-cell-bg")).toBe("rgba(255, 0, 0, 0.2)");
+		expect(scrolling!.style.backgroundColor).not.toBe("");
+	});
+
+	it("freezes nothing by default", async () => {
+		const table = await renderTable(model({ rows: [["a"]] }), container, fakeMarkdown);
+		expect(table.querySelector(".is-frozen-row, .is-frozen-col")).toBeNull();
+		expect(table.parentElement!.classList.contains("has-frozen-rows")).toBe(false);
+	});
+});
+
+describe("renderTable: table size", () => {
+	it("limits the scroll box to maxHeight and maxWidth", async () => {
+		const table = await renderTable(model({ rows: [["a"]], maxHeight: 300, maxWidth: 500 }), container, fakeMarkdown);
+		const wrapper = table.parentElement!;
+		expect(wrapper.style.maxHeight).toBe("300px");
+		expect(wrapper.style.maxWidth).toBe("500px");
+		expect(wrapper.classList.contains("has-max-height")).toBe(true);
+	});
+
+	it("sets no limit by default", async () => {
+		const table = await renderTable(model({ rows: [["a"]] }), container, fakeMarkdown);
+		const wrapper = table.parentElement!;
+		expect(wrapper.style.maxHeight).toBe("");
+		expect(wrapper.style.maxWidth).toBe("");
+		expect(wrapper.classList.contains("has-max-height")).toBe(false);
+	});
+});

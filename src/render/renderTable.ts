@@ -10,6 +10,9 @@ export const CLASS_PREFIX = "dream-table";
 /** CSS variable carrying a cell's line height to the blocks inside it (see styles.css). */
 export const LINE_HEIGHT_VAR = "--dream-table-line-height";
 
+/** CSS variable carrying a frozen cell's own background color (see styles.css). */
+export const CELL_BG_VAR = "--dream-table-cell-bg";
+
 /** Width (px) used for automatic columns once other columns have a fixed width. */
 export const DEFAULT_COLUMN_WIDTH = 120;
 
@@ -50,6 +53,10 @@ export async function renderTable(
 	if (thead) table.appendChild(thead);
 	table.appendChild(tbody);
 	table.classList.toggle("is-collapsed", header > 0 && model.collapsed);
+	wrapper.classList.toggle("has-frozen-rows", model.freezeRows > 0);
+	wrapper.classList.toggle("has-max-height", model.maxHeight !== null);
+	if (model.maxHeight !== null) wrapper.style.maxHeight = `${model.maxHeight}px`;
+	if (model.maxWidth !== null) wrapper.style.maxWidth = `${model.maxWidth}px`;
 	wrapper.appendChild(table);
 	container.appendChild(wrapper);
 
@@ -67,6 +74,11 @@ export async function renderTable(
 				td.rowSpan = merge.bottom - merge.top + 1;
 				td.colSpan = merge.right - merge.left + 1;
 			}
+			// Only cells wholly inside the frozen rows or columns stay in place.
+			const frozenRow = (merge?.bottom ?? row) < model.freezeRows;
+			const frozenCol = (merge?.right ?? col) < model.freezeCols;
+			if (frozenRow) td.classList.add("is-frozen-row");
+			if (frozenCol) td.classList.add("is-frozen-col");
 			// Padding, line height and font are resolved per cell (own style, else
 			// the table default) and set inline, so theme rules cannot override them.
 			const style = { ...model.getStyle(row, col) };
@@ -80,6 +92,12 @@ export async function renderTable(
 			if (fontFamily !== null) style.fontFamily = fontFamily;
 			applyCellStyle(td, style);
 			applyCellBorder(td, model.getBorder(row, col));
+			if ((frozenRow || frozenCol) && style.bg) {
+				// Laid over an opaque background (see styles.css), so a translucent
+				// color does not let the cells scrolling underneath show through.
+				td.style.backgroundColor = "";
+				td.style.setProperty(CELL_BG_VAR, style.bg);
+			}
 
 			const content = model.getCell(row, col);
 			if (content !== "") pending.push(renderMarkdown(preserveBlankLines(content), td));
@@ -92,7 +110,49 @@ export async function renderTable(
 	// Added last so rendering the cell's markdown cannot replace it.
 	const first = thead?.querySelector<HTMLTableCellElement>("td[data-row='0'][data-col='0']");
 	first?.prepend(createCollapseButton(table, onToggleCollapse));
+	if (model.freezeRows > 0 || model.freezeCols > 0) trackFrozenOffsets(table);
 	return table;
+}
+
+/**
+ * Frozen cells are `position: sticky`; each needs the offset at which it
+ * stops, which is where it sits in the table. That depends on the rendered
+ * row heights and column widths, so it is measured again whenever the
+ * table's size changes (images loading, a cell being edited, a resize).
+ */
+function trackFrozenOffsets(table: HTMLTableElement): void {
+	updateFrozenOffsets(table);
+	const view = table.ownerDocument.defaultView;
+	if (!view?.ResizeObserver) return;
+	const observer = new view.ResizeObserver(() => {
+		if (!table.isConnected) {
+			observer.disconnect();
+			return;
+		}
+		updateFrozenOffsets(table);
+	});
+	observer.observe(table);
+}
+
+/** Sets each frozen cell's sticky `top` / `left` to its unscrolled position in the table. */
+export function updateFrozenOffsets(table: HTMLTableElement): void {
+	const cells = Array.from(
+		table.querySelectorAll<HTMLTableCellElement>("td.is-frozen-row, td.is-frozen-col"),
+	);
+	// Measured without sticky, so a scrolled table reports the natural positions,
+	// and to the fraction of a pixel: rounded offsets leave gaps between frozen rows.
+	table.classList.add("is-measuring");
+	const origin = table.getBoundingClientRect();
+	const offsets = cells.map((td) => {
+		const rect = td.getBoundingClientRect();
+		return { top: rect.top - origin.top, left: rect.left - origin.left };
+	});
+	table.classList.remove("is-measuring");
+	cells.forEach((td, i) => {
+		const { top, left } = offsets[i]!;
+		td.style.top = td.classList.contains("is-frozen-row") ? `${top}px` : "";
+		td.style.left = td.classList.contains("is-frozen-col") ? `${left}px` : "";
+	});
 }
 
 /** Chevron that hides or shows the body rows. */

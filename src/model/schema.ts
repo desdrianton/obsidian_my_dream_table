@@ -9,6 +9,8 @@ import {
 	MAX_FONT_SIZE,
 	MAX_LINE_HEIGHT,
 	MAX_PADDING,
+	MAX_TABLE_SIZE,
+	MIN_TABLE_SIZE,
 	MIN_FONT_SIZE,
 	MIN_LINE_HEIGHT,
 	MIN_BORDER_WIDTH,
@@ -45,6 +47,14 @@ export interface ParsedTable {
 	header: number;
 	/** Whether the body rows are hidden. */
 	collapsed: boolean;
+	/** Number of frozen rows at the top (0 for none). */
+	freezeRows: number;
+	/** Number of frozen columns at the left (0 for none). */
+	freezeCols: number;
+	/** Tallest the table may be (px), or null for no limit. */
+	maxHeight: number | null;
+	/** Widest the table may be (px), or null for the width of the note. */
+	maxWidth: number | null;
 }
 
 export type ParseResult =
@@ -79,6 +89,10 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
 	"fontFamily",
 	"header",
 	"collapsed",
+	"freezeRows",
+	"freezeCols",
+	"maxHeight",
+	"maxWidth",
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -146,6 +160,11 @@ export function parseTableData(input: unknown): ParseResult {
 		else collapsed = input.collapsed;
 	}
 
+	const freezeRows = parseFreeze(input.freezeRows, "freezeRows", "rows", rows.length, errors);
+	const freezeCols = parseFreeze(input.freezeCols, "freezeCols", "columns", colCount, errors);
+	const maxHeight = parseTableSize(input.maxHeight, "maxHeight", errors);
+	const maxWidth = parseTableSize(input.maxWidth, "maxWidth", errors);
+
 	if (errors.length > 0) {
 		return { ok: false, errors };
 	}
@@ -163,6 +182,10 @@ export function parseTableData(input: unknown): ParseResult {
 			fontFamily,
 			header,
 			collapsed,
+			freezeRows,
+			freezeCols,
+			maxHeight,
+			maxWidth,
 		},
 	};
 }
@@ -266,6 +289,32 @@ function parseHeader(value: unknown, rowCount: number, merges: Range[], errors: 
 		return 0;
 	}
 	return header;
+}
+
+function parseFreeze(value: unknown, key: string, what: string, count: number, errors: string[]): number {
+	if (value === undefined || value === null) return 0;
+	if (!Number.isInteger(value) || (value as number) < 0) {
+		errors.push(`\`${key}\` must be the number of ${what} to freeze, e.g. 1.`);
+		return 0;
+	}
+	if ((value as number) > count) {
+		errors.push(`\`${key}\` is ${value} but the table has only ${count} ${what}.`);
+		return 0;
+	}
+	return value as number;
+}
+
+function parseTableSize(value: unknown, key: string, errors: string[]): number | null {
+	if (value === undefined || value === null) return null;
+	if (isValidTableSize(value)) return value;
+	errors.push(`\`${key}\` ${TABLE_SIZE_ERROR}`);
+	return null;
+}
+
+const TABLE_SIZE_ERROR = `must be a whole number of pixels from ${MIN_TABLE_SIZE} to ${MAX_TABLE_SIZE}.`;
+
+export function isValidTableSize(value: unknown): value is number {
+	return Number.isInteger(value) && (value as number) >= MIN_TABLE_SIZE && (value as number) <= MAX_TABLE_SIZE;
 }
 
 /** True if the merge has rows both in a header of `header` rows and below it. */

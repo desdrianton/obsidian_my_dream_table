@@ -18,6 +18,7 @@ import {
 	isValidFontSize,
 	isValidLineHeight,
 	isValidPadding,
+	isValidTableSize,
 	mergeCrossesHeader,
 	roundLineHeight,
 	parseTableData,
@@ -30,6 +31,8 @@ import {
 	MAX_FONT_SIZE,
 	MAX_LINE_HEIGHT,
 	MAX_PADDING,
+	MAX_TABLE_SIZE,
+	MIN_TABLE_SIZE,
 	MIN_FONT_SIZE,
 	MIN_LINE_HEIGHT,
 	MIN_BORDER_WIDTH,
@@ -67,6 +70,10 @@ export class TableModel {
 	private defaultFontFamily: string | null;
 	private header: number;
 	private isCollapsed: boolean;
+	private frozenRows: number;
+	private frozenCols: number;
+	private heightLimit: number | null;
+	private widthLimit: number | null;
 
 	private constructor(table: ParsedTable) {
 		this.rows = table.rows.map((row) => [...row]);
@@ -83,6 +90,10 @@ export class TableModel {
 		this.defaultFontFamily = table.fontFamily;
 		this.header = table.header;
 		this.isCollapsed = table.collapsed;
+		this.frozenRows = table.freezeRows;
+		this.frozenCols = table.freezeCols;
+		this.heightLimit = table.maxHeight;
+		this.widthLimit = table.maxWidth;
 	}
 
 	/** Builds a model from the raw (e.g. YAML-parsed) code block value. */
@@ -110,6 +121,10 @@ export class TableModel {
 			fontFamily: null,
 			header: 0,
 			collapsed: false,
+			freezeRows: 0,
+			freezeCols: 0,
+			maxHeight: null,
+			maxWidth: null,
 		});
 	}
 
@@ -126,6 +141,10 @@ export class TableModel {
 			fontFamily: this.defaultFontFamily,
 			header: this.header,
 			collapsed: this.isCollapsed,
+			freezeRows: this.frozenRows,
+			freezeCols: this.frozenCols,
+			maxHeight: this.heightLimit,
+			maxWidth: this.widthLimit,
 		});
 	}
 
@@ -156,6 +175,10 @@ export class TableModel {
 		if (this.defaultFontFamily !== null) data.fontFamily = this.defaultFontFamily;
 		if (this.header > 0) data.header = this.header;
 		if (this.isCollapsed) data.collapsed = true;
+		if (this.frozenRows > 0) data.freezeRows = this.frozenRows;
+		if (this.frozenCols > 0) data.freezeCols = this.frozenCols;
+		if (this.heightLimit !== null) data.maxHeight = this.heightLimit;
+		if (this.widthLimit !== null) data.maxWidth = this.widthLimit;
 		return data;
 	}
 
@@ -373,6 +396,50 @@ export class TableModel {
 		return this.isCollapsed ? this.header : this.rowCount;
 	}
 
+	// ----------------------------------------------------------------- freeze
+
+	/** Number of rows at the top that stay in place when the table scrolls. */
+	get freezeRows(): number {
+		return this.frozenRows;
+	}
+
+	set freezeRows(count: number) {
+		assertIndex(count, this.rowCount, "Frozen row count");
+		this.frozenRows = count;
+	}
+
+	/** Number of columns at the left that stay in place when the table scrolls. */
+	get freezeCols(): number {
+		return this.frozenCols;
+	}
+
+	set freezeCols(count: number) {
+		assertIndex(count, this.colCount, "Frozen column count");
+		this.frozenCols = count;
+	}
+
+	// ------------------------------------------------------------- table size
+
+	/** Tallest the table may be (px) before it scrolls in its own box, or null for no limit. */
+	get maxHeight(): number | null {
+		return this.heightLimit;
+	}
+
+	set maxHeight(height: number | null) {
+		assertTableSize(height, "Height");
+		this.heightLimit = height;
+	}
+
+	/** Widest the table may be (px) before it scrolls in its own box, or null for the note's width. */
+	get maxWidth(): number | null {
+		return this.widthLimit;
+	}
+
+	set maxWidth(width: number | null) {
+		assertTableSize(width, "Width");
+		this.widthLimit = width;
+	}
+
 	// -------------------------------------------------------- column widths
 
 	/** Width per column in px, or null where the width is automatic. */
@@ -541,6 +608,7 @@ export class TableModel {
 		this.rows.splice(index, 0, ...newRows);
 		this.shiftForInsert("row", index, count);
 		if (index < this.header) this.header += count;
+		if (index < this.frozenRows) this.frozenRows += count;
 	}
 
 	deleteRows(index: number, count = 1): void {
@@ -551,6 +619,7 @@ export class TableModel {
 		this.shiftForDelete("row", index, count);
 		this.header -= Math.max(0, Math.min(this.header, index + count) - index);
 		if (this.header === 0) this.isCollapsed = false;
+		this.frozenRows -= Math.max(0, Math.min(this.frozenRows, index + count) - index);
 	}
 
 	insertColumns(index: number, count = 1): void {
@@ -561,6 +630,7 @@ export class TableModel {
 		}
 		this.widths.splice(index, 0, ...Array<ColumnWidth>(count).fill(null));
 		this.shiftForInsert("col", index, count);
+		if (index < this.frozenCols) this.frozenCols += count;
 	}
 
 	deleteColumns(index: number, count = 1): void {
@@ -570,6 +640,7 @@ export class TableModel {
 		for (const row of this.rows) row.splice(index, count);
 		this.widths.splice(index, count);
 		this.shiftForDelete("col", index, count);
+		this.frozenCols -= Math.max(0, Math.min(this.frozenCols, index + count) - index);
 	}
 
 	private shiftForInsert(axis: Axis, index: number, count: number): void {
@@ -624,6 +695,12 @@ export class TableModel {
 function assertIndex(index: number, max: number, label: string): void {
 	if (!Number.isInteger(index) || index < 0 || index > max) {
 		throw new RangeError(`${label} index ${index} is out of bounds (0..${max}).`);
+	}
+}
+
+function assertTableSize(size: number | null, label: string): void {
+	if (size !== null && !isValidTableSize(size)) {
+		throw new RangeError(`${label} must be a whole number from ${MIN_TABLE_SIZE} to ${MAX_TABLE_SIZE}, got ${size}.`);
 	}
 }
 

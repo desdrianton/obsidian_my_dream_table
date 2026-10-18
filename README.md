@@ -24,6 +24,8 @@ styles:
   Images work like anywhere else in Obsidian: `![[photo.png]]`, `![[photo.png|200]]` (no need to escape `|`), or `![](https://…)`. Paste or drop an image onto a cell to save it as an attachment and embed it, or right-click → *Insert image…* to pick one from the vault. Images shrink to fit their column.
 - **`header`**: number of rows at the top that form the header (default `0`, no header). Header cells get the theme's table-header look unless styled otherwise. Right-click → *Make header (rows up to here)* / *Remove header* to set it from the table. A merge may not cross the end of the header.
 - **`collapsed`**: `true` hides every row below the header. Click the chevron in the first header cell (or right-click → *Collapse table*) to toggle it; the state is saved in the note. Needs a `header`.
+- **`freezeRows`**, **`freezeCols`**: number of rows at the top and columns at the left that stay in place while the rest of the table scrolls, like freeze panes in a spreadsheet (default `0`). With frozen rows the table scrolls vertically in its own box, at most 70% of the window tall unless `maxHeight` is set. A merged cell is frozen only if it lies wholly inside the frozen rows or columns. Right-click → *Freeze rows up to here* / *Freeze columns up to here* / *Unfreeze rows and columns* to set them from the table.
+- **`maxHeight`**, **`maxWidth`**: largest size of the table's box in px (50–10000). A taller or wider table scrolls inside the box, and frozen rows and columns stay in place. Without them the box is as wide as the note and as tall as the table (70% of the window with frozen rows). Right-click → *Table height…* / *Table width…* to set them from the table.
 - **`merges`**: ranges in A1 notation. Only the top-left cell's content is shown.
 - **`styles`**: rules applied in order; later rules win. Properties:
   - `bg`, `fg`: `#rgb`/`#rrggbb`, color names, `rgb()`/`hsl()`, or theme variables like `var(--color-red)`
@@ -69,12 +71,13 @@ Tables are edited where they are, in Live Preview and Reading view; every change
 - *Merge cells* / *Unmerge cells*
 - *Insert row above/below*, *Insert column left/right*, *Reset column widths*
 - *Make header (rows up to here)*, *Remove header*, *Collapse table*
+- *Freeze rows up to here*, *Freeze columns up to here*, *Unfreeze rows and columns*
 - *Delete row*, *Delete column*, *Clear content*
 - *Bold*, *Italic*, *Subscript*, *Superscript*, *Align left/center/right*, *Clear formatting* (Ctrl+B / Ctrl+I also toggle bold / italic on selected cells)
 - *Insert image…*
 - *Background color…*, *Text color…*
 - *Cell font…*, *Cell font size…*, *Cell padding…*, *Cell line height…*, *Cell border…* (override the table settings for the selected cells)
-- *Table font…*, *Table font size…*, *Table padding…*, *Table line height…*, *Table border…*
+- *Table font…*, *Table font size…*, *Table padding…*, *Table line height…*, *Table border…*, *Table height…*, *Table width…*
 
 Vertical alignment (`valign`) can only be set in the code block for now.
 

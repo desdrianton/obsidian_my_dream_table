@@ -386,3 +386,75 @@
 .dream-table td > .dream-table-collapse + * {
 	margin-top: 0;
 }
+
+/* ----------------------------------------------------------------- freeze */
+
+/*
+ * Frozen rows need the table to scroll vertically inside its own box. A
+ * table's own `maxHeight` is set inline and wins over this default.
+ */
+.dream-table-wrapper.has-frozen-rows {
+	max-height: var(--dream-table-max-height, 70vh);
+}
+
+.dream-table-wrapper:is(.has-frozen-rows, .has-max-height) {
+	overflow-y: auto;
+}
+
+/* Offsets (top / left) are set inline from the rendered layout. */
+.dream-table td:is(.is-frozen-row, .is-frozen-col) {
+	position: sticky;
+	z-index: 1;
+}
+
+/* Frozen columns slide up under frozen rows; the corner stays on top of both. */
+.dream-table td.is-frozen-row {
+	z-index: 2;
+}
+
+.dream-table td.is-frozen-row.is-frozen-col {
+	z-index: 3;
+}
+
+/*
+ * With collapsed borders the browser draws a sticky cell's border where the
+ * cell would be unscrolled, so it slides away; draw it again on the cell.
+ */
+.dream-table td:is(.is-frozen-row, .is-frozen-col)::after {
+	content: "";
+	position: absolute;
+	inset: -1px;
+	border: inherit;
+	pointer-events: none;
+}
+
+.dream-table.is-measuring td:is(.is-frozen-row, .is-frozen-col) {
+	position: static;
+}
+
+/*
+ * Cells scroll underneath frozen ones, so those get an opaque background with
+ * their own color (the header's, or set inline as --dream-table-cell-bg,
+ * either possibly translucent) laid over it.
+ */
+.dream-table td:is(.is-frozen-row, .is-frozen-col) {
+	background-color: var(--background-primary);
+	background-image: linear-gradient(var(--dream-table-cell-bg), var(--dream-table-cell-bg));
+}
+
+.dream-table td:is(.is-frozen-row, .is-frozen-col) {
+	--dream-table-cell-bg: transparent;
+}
+
+.dream-table thead td:is(.is-frozen-row, .is-frozen-col) {
+	--dream-table-cell-bg: var(--table-header-background);
+}
+
+.dream-table td:is(.is-frozen-row, .is-frozen-col).is-selected {
+	background-image:
+		linear-gradient(
+			color-mix(in srgb, var(--interactive-accent) 20%, transparent),
+			color-mix(in srgb, var(--interactive-accent) 20%, transparent)
+		),
+		linear-gradient(var(--dream-table-cell-bg), var(--dream-table-cell-bg));
+}

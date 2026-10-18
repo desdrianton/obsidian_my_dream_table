@@ -6,6 +6,10 @@ export const MIN_COLUMN_WIDTH = 20;
 /** Widest column width (px) accepted in a table. */
 export const MAX_COLUMN_WIDTH = 5000;
 
+/** Allowed maximum table height and width (px). */
+export const MIN_TABLE_SIZE = 50;
+export const MAX_TABLE_SIZE = 10000;
+
 /** Allowed cell padding (px), applied to all four sides. */
 export const MIN_PADDING = 0;
 export const MAX_PADDING = 100;
@@ -139,4 +143,12 @@ export interface TableData {
 	header?: number;
 	/** Whether the rows below the header are hidden. Needs a header. */
 	collapsed?: boolean;
+	/** Number of rows at the top that stay in place when the table scrolls. */
+	freezeRows?: number;
+	/** Number of columns at the left that stay in place when the table scrolls. */
+	freezeCols?: number;
+	/** Tallest the table may be (px) before it scrolls vertically in its own box. */
+	maxHeight?: number;
+	/** Widest the table may be (px) before it scrolls horizontally in its own box. */
+	maxWidth?: number;
 }
