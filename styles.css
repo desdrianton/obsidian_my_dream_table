@@ -21,6 +21,14 @@
 	vertical-align: top;
 }
 
+/*
+ * An empty cell holds an invisible character, so it is one line tall like a
+ * cell with one line of text instead of collapsing to its padding.
+ */
+.dream-table td:empty::before {
+	content: "\200b";
+}
+
 /* Also set directly, in case a theme puts pre-wrap on cells or text blocks. */
 .dream-table td,
 .dream-table td :is(p, ul, ol, li, blockquote) {
@@ -211,6 +219,11 @@
 .dream-table-input:focus-visible {
 	outline: none;
 	box-shadow: none;
+}
+
+/* Obsidian gives a hovered or focused textarea its own fill; keep the cell's. */
+.dream-table .dream-table-input:is(:hover, :focus, :focus-visible, :active) {
+	background: transparent;
 }
 
 /* A fixed column width wins over the textarea's minimum. */
