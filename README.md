@@ -37,7 +37,6 @@ styles:
   - `script`: `sub` / `sup` draws the whole cell as subscript or superscript. For part of the text, write `H<sub>2</sub>O` or `x<sup>2</sup>` in the cell.
   - `borderColor`, `borderWidth` (px, 0–20), `borderStyle` (`solid` / `dashed` / `dotted` / `double` / `none`): border on all sides of each cell, overriding the table border
   - `null` resets a property to the default
-- **Selecting cells**: click, drag, or Shift+click to select a range. Ctrl+click (Cmd+click on macOS) adds more cells or ranges (drag to add a range), and Ctrl+clicking a selected cell again deselects it. Formatting (bold, italic, alignment, colors, cell font, size, padding, line height, border, clear formatting/content) then applies to every selected cell; merging and inserting/deleting rows or columns need a single range.
 - **`widths`**: column widths in px, e.g. `[120, null, 80]`. `null` (or a missing entry) means automatic. Drag a column border in the table to set them; right-click → *Reset column widths* to go back to automatic.
 - **`padding`**: default cell padding in px (0–100) for the whole table. Right-click → *Table padding…* / *Cell padding…* to set it from the table.
 - **`lineHeight`**: default line height for every cell (0.5–5). Right-click → *Table line height…* / *Cell line height…* to set it from the table.
@@ -45,6 +44,41 @@ styles:
 - **`fontFamily`**: default font for every cell. Right-click → *Table font…* / *Cell font…* to pick a theme font (text, interface, monospace), a common font, or type your own. Right-click → *Subscript* / *Superscript* toggles `script` on the selected cells.
 - **`border`**: default border for every cell, e.g. `{ color: "#888888", width: 1, style: "solid" }`. Any property may be left out to use the theme. Right-click → *Table border…* / *Cell border…* to set it from the table.
 - **`version`**: format version, optional (currently `1`).
+
+If the block has a mistake (an unknown key, a bad range or color, …), the table is replaced by a list of what is wrong.
+
+## Editing in the table
+
+Tables are edited where they are, in Live Preview and Reading view; every change is written back to the code block (and can be undone with the note's undo while it is open in the editor). Tables shown inside an embed are read-only.
+
+**Selecting**
+- Click a cell, drag across cells, or Shift+click to select a range. Merged cells are always selected whole.
+- Ctrl+click (Cmd+click on macOS) adds more cells to the selection; Ctrl+drag adds a range. Ctrl+click a selected cell again to deselect it. Formatting then applies to every selected cell; merging and inserting or deleting rows and columns need a single range.
+- Arrow keys and Tab / Shift+Tab move between cells; Shift+arrow grows the selection. Ctrl+A selects every cell, Escape clears the selection. Clicking outside the table also clears it.
+- From the note, moving the cursor into the table with the arrow keys selects its first (or last) cell; arrowing past the table's edge puts the cursor back in the note.
+
+**Editing a cell**
+- Double-click, press Enter or F2, or just start typing (which replaces the content) to edit the cell's markdown.
+- Enter saves and moves down; Shift+Enter adds a line; Escape cancels; clicking elsewhere saves.
+- Tab / Shift+Tab indents or outdents the current lines (handy for nested lists).
+- Ctrl+B / Ctrl+I wrap the selected text in bold / italic, Ctrl+K inserts a link, Ctrl+A selects all of the cell's text.
+- Delete or Backspace (when not editing) clears the selected cells.
+- Task checkboxes (`- [ ] todo`) can be ticked right in the table; the change is saved to the cell.
+
+**Right-click menu** (acts on the selection)
+- *Merge cells* / *Unmerge cells*
+- *Insert row above/below*, *Insert column left/right*, *Reset column widths*
+- *Make header (rows up to here)*, *Remove header*, *Collapse table*
+- *Delete row*, *Delete column*, *Clear content*
+- *Bold*, *Italic*, *Subscript*, *Superscript*, *Align left/center/right*, *Clear formatting* (Ctrl+B / Ctrl+I also toggle bold / italic on selected cells)
+- *Insert image…*
+- *Background color…*, *Text color…*
+- *Cell font…*, *Cell font size…*, *Cell padding…*, *Cell line height…*, *Cell border…* (override the table settings for the selected cells)
+- *Table font…*, *Table font size…*, *Table padding…*, *Table line height…*, *Table border…*
+
+Vertical alignment (`valign`) can only be set in the code block for now.
+
+Drag the border between two columns to resize them. Paste or drop an image onto a cell to save it as an attachment and embed it.
 
 ## Development
 
