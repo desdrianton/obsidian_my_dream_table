@@ -5,13 +5,17 @@ import {
 	BORDER_STYLES,
 	MAX_BORDER_WIDTH,
 	MAX_COLUMN_WIDTH,
+	MAX_FONT_FAMILY_LENGTH,
+	MAX_FONT_SIZE,
 	MAX_LINE_HEIGHT,
 	MAX_PADDING,
+	MIN_FONT_SIZE,
 	MIN_LINE_HEIGHT,
 	MIN_BORDER_WIDTH,
 	type Border,
 	MIN_COLUMN_WIDTH,
 	MIN_PADDING,
+	SCRIPTS,
 	type ColumnWidth,
 	STYLE_KEYS,
 	type CellStyle,
@@ -33,6 +37,10 @@ export interface ParsedTable {
 	border: Border;
 	/** Table-wide default line height, or null for the theme default. */
 	lineHeight: number | null;
+	/** Table-wide default font size (px), or null for the theme default. */
+	fontSize: number | null;
+	/** Table-wide default font family, or null for the theme default. */
+	fontFamily: string | null;
 	/** Number of header rows (0 for none). */
 	header: number;
 	/** Whether the body rows are hidden. */
@@ -67,6 +75,8 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
 	"padding",
 	"border",
 	"lineHeight",
+	"fontSize",
+	"fontFamily",
 	"header",
 	"collapsed",
 ]);
@@ -116,6 +126,18 @@ export function parseTableData(input: unknown): ParseResult {
 		else errors.push(`\`lineHeight\` ${LINE_HEIGHT_ERROR}`);
 	}
 
+	let fontSize: number | null = null;
+	if (input.fontSize !== undefined && input.fontSize !== null) {
+		if (isValidFontSize(input.fontSize)) fontSize = input.fontSize;
+		else errors.push(`\`fontSize\` ${FONT_SIZE_ERROR}`);
+	}
+
+	let fontFamily: string | null = null;
+	if (input.fontFamily !== undefined && input.fontFamily !== null) {
+		if (isValidFontFamily(input.fontFamily)) fontFamily = input.fontFamily.trim();
+		else errors.push(`\`fontFamily\` ${FONT_FAMILY_ERROR}`);
+	}
+
 	const header = parseHeader(input.header, rows.length, merges, errors);
 	let collapsed = false;
 	if (input.collapsed !== undefined && input.collapsed !== null) {
@@ -129,7 +151,19 @@ export function parseTableData(input: unknown): ParseResult {
 	}
 	return {
 		ok: true,
-		table: { rows, merges, styles, widths, padding, border, lineHeight, header, collapsed },
+		table: {
+			rows,
+			merges,
+			styles,
+			widths,
+			padding,
+			border,
+			lineHeight,
+			fontSize,
+			fontFamily,
+			header,
+			collapsed,
+		},
 	};
 }
 
@@ -299,8 +333,7 @@ function parseStyles(value: unknown, errors: string[]): StyleRule[] {
 				valid = false;
 				continue;
 			}
-			(style as Record<string, unknown>)[key] =
-				key === "lineHeight" && typeof prop === "number" ? roundLineHeight(prop) : prop;
+			(style as Record<string, unknown>)[key] = normalizeStyleValue(key as StyleKey, prop);
 		}
 
 		if (valid && range) rules.push({ range, style });
@@ -363,6 +396,34 @@ export function roundLineHeight(value: number): number {
 	return Math.round(value * 100) / 100;
 }
 
+const FONT_SIZE_ERROR = `must be a whole number of pixels from ${MIN_FONT_SIZE} to ${MAX_FONT_SIZE}.`;
+
+export function isValidFontSize(value: unknown): value is number {
+	return Number.isInteger(value) && (value as number) >= MIN_FONT_SIZE && (value as number) <= MAX_FONT_SIZE;
+}
+
+const FONT_FAMILY_ERROR = 'must be a font name or a comma-separated list, e.g. "Georgia, serif" or "var(--font-monospace)".';
+
+/** One entry of a font family list: a quoted or plain name, or a theme variable. */
+const FONT_NAME_PATTERNS = [/^"[^"\\]+"$/, /^'[^'\\]+'$/, /^[a-z_-][a-z0-9 _-]*$/i, /^var\(--[a-z0-9_-]+\)$/i];
+
+/**
+ * Accepts a CSS font family list such as `"Fira Code", monospace`. Only
+ * names and theme variables are allowed, so no other CSS can sneak in.
+ */
+export function isValidFontFamily(value: unknown): value is string {
+	if (typeof value !== "string" || value.length > MAX_FONT_FAMILY_LENGTH) return false;
+	const names = value.split(",").map((name) => name.trim());
+	return names.every((name) => FONT_NAME_PATTERNS.some((pattern) => pattern.test(name)));
+}
+
+/** Tidies a valid style value before it is stored. */
+function normalizeStyleValue(key: StyleKey, value: unknown): unknown {
+	if (key === "lineHeight" && typeof value === "number") return roundLineHeight(value);
+	if (key === "fontFamily" && typeof value === "string") return value.trim();
+	return value;
+}
+
 const PADDING_ERROR = `must be a whole number of pixels from ${MIN_PADDING} to ${MAX_PADDING}.`;
 
 export function isValidPadding(value: unknown): value is number {
@@ -396,5 +457,11 @@ function validateStyleValue(key: StyleKey, value: unknown): string | null {
 			return isValidPadding(value) ? null : PADDING_ERROR;
 		case "lineHeight":
 			return isValidLineHeight(value) ? null : LINE_HEIGHT_ERROR;
+		case "fontSize":
+			return isValidFontSize(value) ? null : FONT_SIZE_ERROR;
+		case "fontFamily":
+			return isValidFontFamily(value) ? null : FONT_FAMILY_ERROR;
+		case "script":
+			return (SCRIPTS as readonly unknown[]).includes(value) ? null : `must be one of ${SCRIPTS.join(", ")}.`;
 	}
 }

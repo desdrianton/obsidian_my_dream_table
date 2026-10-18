@@ -37,7 +37,7 @@ describe("parseTableData: valid input", () => {
 
 	it("allows a missing version, merges, and styles", () => {
 		const table = expectTable(parseTableData({ rows: [["a"]] }));
-		expect(table).toEqual({ rows: [["a"]], merges: [], styles: [], widths: [null], padding: null, border: {}, lineHeight: null, header: 0, collapsed: false });
+		expect(table).toEqual({ rows: [["a"]], merges: [], styles: [], widths: [null], padding: null, border: {}, lineHeight: null, fontSize: null, fontFamily: null, header: 0, collapsed: false });
 	});
 
 	it("converts YAML scalars in cells to strings", () => {

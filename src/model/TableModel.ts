@@ -14,6 +14,8 @@ import {
 	isBorderStyle,
 	isValidBorderWidth,
 	isValidColor,
+	isValidFontFamily,
+	isValidFontSize,
 	isValidLineHeight,
 	isValidPadding,
 	mergeCrossesHeader,
@@ -25,8 +27,10 @@ import {
 	FORMAT_VERSION,
 	MAX_BORDER_WIDTH,
 	MAX_COLUMN_WIDTH,
+	MAX_FONT_SIZE,
 	MAX_LINE_HEIGHT,
 	MAX_PADDING,
+	MIN_FONT_SIZE,
 	MIN_LINE_HEIGHT,
 	MIN_BORDER_WIDTH,
 	type Border,
@@ -59,6 +63,8 @@ export class TableModel {
 	private defaultPadding: number | null;
 	private defaultBorder: Border;
 	private defaultLineHeight: number | null;
+	private defaultFontSize: number | null;
+	private defaultFontFamily: string | null;
 	private header: number;
 	private isCollapsed: boolean;
 
@@ -73,6 +79,8 @@ export class TableModel {
 		this.defaultPadding = table.padding;
 		this.defaultBorder = { ...table.border };
 		this.defaultLineHeight = table.lineHeight;
+		this.defaultFontSize = table.fontSize;
+		this.defaultFontFamily = table.fontFamily;
 		this.header = table.header;
 		this.isCollapsed = table.collapsed;
 	}
@@ -98,6 +106,8 @@ export class TableModel {
 			padding: null,
 			border: {},
 			lineHeight: null,
+			fontSize: null,
+			fontFamily: null,
 			header: 0,
 			collapsed: false,
 		});
@@ -112,6 +122,8 @@ export class TableModel {
 			padding: this.defaultPadding,
 			border: this.defaultBorder,
 			lineHeight: this.defaultLineHeight,
+			fontSize: this.defaultFontSize,
+			fontFamily: this.defaultFontFamily,
 			header: this.header,
 			collapsed: this.isCollapsed,
 		});
@@ -140,6 +152,8 @@ export class TableModel {
 		if (this.defaultPadding !== null) data.padding = this.defaultPadding;
 		if (Object.keys(this.defaultBorder).length > 0) data.border = { ...this.defaultBorder };
 		if (this.defaultLineHeight !== null) data.lineHeight = this.defaultLineHeight;
+		if (this.defaultFontSize !== null) data.fontSize = this.defaultFontSize;
+		if (this.defaultFontFamily !== null) data.fontFamily = this.defaultFontFamily;
 		if (this.header > 0) data.header = this.header;
 		if (this.isCollapsed) data.collapsed = true;
 		return data;
@@ -427,6 +441,44 @@ export class TableModel {
 	/** Line height a cell is drawn with: its own style, else the table default. */
 	getLineHeight(row: number, col: number): number | null {
 		return this.getStyle(row, col).lineHeight ?? this.defaultLineHeight;
+	}
+
+	// ----------------------------------------------------------------- font
+
+	/** Default font size (px) for every cell, or null for the theme default. */
+	get tableFontSize(): number | null {
+		return this.defaultFontSize;
+	}
+
+	set tableFontSize(fontSize: number | null) {
+		if (fontSize !== null && !isValidFontSize(fontSize)) {
+			throw new RangeError(
+				`Font size must be a whole number from ${MIN_FONT_SIZE} to ${MAX_FONT_SIZE}, got ${fontSize}.`,
+			);
+		}
+		this.defaultFontSize = fontSize;
+	}
+
+	/** Font size (px) a cell is drawn with: its own style, else the table default. */
+	getFontSize(row: number, col: number): number | null {
+		return this.getStyle(row, col).fontSize ?? this.defaultFontSize;
+	}
+
+	/** Default font family for every cell, or null for the theme default. */
+	get tableFontFamily(): string | null {
+		return this.defaultFontFamily;
+	}
+
+	set tableFontFamily(fontFamily: string | null) {
+		if (fontFamily !== null && !isValidFontFamily(fontFamily)) {
+			throw new RangeError(`Invalid font family: ${fontFamily}`);
+		}
+		this.defaultFontFamily = fontFamily === null ? null : fontFamily.trim();
+	}
+
+	/** Font family a cell is drawn with: its own style, else the table default. */
+	getFontFamily(row: number, col: number): string | null {
+		return this.getStyle(row, col).fontFamily ?? this.defaultFontFamily;
 	}
 
 	// --------------------------------------------------------------- border

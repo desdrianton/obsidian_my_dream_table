@@ -14,6 +14,17 @@ export const MAX_PADDING = 100;
 export const MIN_LINE_HEIGHT = 0.5;
 export const MAX_LINE_HEIGHT = 5;
 
+/** Allowed font size (px). */
+export const MIN_FONT_SIZE = 6;
+export const MAX_FONT_SIZE = 96;
+
+/** Longest accepted font family list, e.g. `"Fira Code", monospace`. */
+export const MAX_FONT_FAMILY_LENGTH = 200;
+
+export const SCRIPTS = ["sub", "sup"] as const;
+/** Subscript or superscript text. */
+export type Script = (typeof SCRIPTS)[number];
+
 /** Allowed border width (px). */
 export const MIN_BORDER_WIDTH = 0;
 export const MAX_BORDER_WIDTH = 20;
@@ -53,6 +64,12 @@ export interface CellStyle {
 	borderStyle?: BorderStyle | null;
 	/** Line height as a multiple of the font size; overrides the table line height. */
 	lineHeight?: number | null;
+	/** Font size (px); overrides the table font size. */
+	fontSize?: number | null;
+	/** CSS font family list; overrides the table font. */
+	fontFamily?: string | null;
+	/** Draws the whole cell as subscript or superscript. */
+	script?: Script | null;
 }
 
 export const STYLE_KEYS = [
@@ -67,6 +84,9 @@ export const STYLE_KEYS = [
 	"borderWidth",
 	"borderStyle",
 	"lineHeight",
+	"fontSize",
+	"fontFamily",
+	"script",
 ] as const;
 export type StyleKey = (typeof STYLE_KEYS)[number];
 
@@ -111,6 +131,10 @@ export interface TableData {
 	border?: Border;
 	/** Default line height for every cell; style rules can override it. */
 	lineHeight?: number;
+	/** Default font size (px) for every cell; style rules can override it. */
+	fontSize?: number;
+	/** Default font family for every cell; style rules can override it. */
+	fontFamily?: string;
 	/** Number of rows at the top that form the table header. */
 	header?: number;
 	/** Whether the rows below the header are hidden. Needs a header. */

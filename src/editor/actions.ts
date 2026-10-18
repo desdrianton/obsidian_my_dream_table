@@ -1,7 +1,7 @@
 import { isSingleCell, rangesEqual, rangesIntersect } from "../model/range";
 import type { TableModel } from "../model/TableModel";
 import { roundLineHeight } from "../model/schema";
-import type { BorderStyle, CellStyle, HorizontalAlign, Range } from "../model/types";
+import type { BorderStyle, CellStyle, HorizontalAlign, Range, Script } from "../model/types";
 
 /**
  * A context-menu command on the selected range. `run` mutates the model and
@@ -25,6 +25,14 @@ function toggle(key: "bold" | "italic") {
 	return (model: TableModel, range: Range) => {
 		const on = model.getStyle(range.top, range.left)[key] === true;
 		model.applyStyle(range, { [key]: on ? null : true });
+	};
+}
+
+/** Subscript and superscript exclude each other; picking the active one turns it off. */
+function toggleScript(value: Script) {
+	return (model: TableModel, range: Range) => {
+		const on = model.getStyle(range.top, range.left).script === value;
+		model.applyStyle(range, { script: on ? null : value });
 	};
 }
 
@@ -201,6 +209,22 @@ export const TABLE_ACTIONS: readonly TableAction[] = [
 		run: toggle("italic"),
 	},
 	{
+		id: "subscript",
+		title: "Subscript",
+		icon: "subscript",
+		section: "format",
+		isChecked: (model, range) => model.getStyle(range.top, range.left).script === "sub",
+		run: toggleScript("sub"),
+	},
+	{
+		id: "superscript",
+		title: "Superscript",
+		icon: "superscript",
+		section: "format",
+		isChecked: (model, range) => model.getStyle(range.top, range.left).script === "sup",
+		run: toggleScript("sup"),
+	},
+	{
 		id: "align-left",
 		title: "Align left",
 		icon: "align-left",
@@ -257,6 +281,16 @@ export function setPadding(model: TableModel, range: Range, padding: number | nu
 /** Sets or (with null) removes the line height override on a range. */
 export function setLineHeight(model: TableModel, range: Range, lineHeight: number | null): void {
 	model.applyStyle(range, { lineHeight: lineHeight === null ? null : roundLineHeight(lineHeight) });
+}
+
+/** Sets or (with null) removes the font size override on a range. */
+export function setFontSize(model: TableModel, range: Range, fontSize: number | null): void {
+	model.applyStyle(range, { fontSize });
+}
+
+/** Sets or (with null) removes the font family override on a range. */
+export function setFontFamily(model: TableModel, range: Range, fontFamily: string | null): void {
+	model.applyStyle(range, { fontFamily: fontFamily === null ? null : fontFamily.trim() });
 }
 
 /** Sets the cell border override on a range; null properties fall back to the table border. */

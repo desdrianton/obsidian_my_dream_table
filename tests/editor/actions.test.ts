@@ -5,6 +5,8 @@ import {
 	clearContent,
 	setBorder,
 	setColor,
+	setFontFamily,
+	setFontSize,
 	setLineHeight,
 	setPadding,
 	TABLE_ACTIONS,
@@ -183,6 +185,31 @@ describe("formatting", () => {
 		expect(m.getBorder(0, 1)).toEqual({ color: "red", width: 3, style: "double" });
 		setBorder(m, r("A1:B1"), { color: null, width: null, style: null });
 		expect(m.getBorder(0, 1)).toEqual({ color: "gray", width: 1 });
+		expect(m.styles).toEqual([]);
+	});
+
+	it("sets and removes the cell font", () => {
+		const m = grid();
+		m.tableFontSize = 14;
+		setFontSize(m, r("A1:B1"), 20);
+		setFontFamily(m, r("A1:B1"), " Georgia ");
+		expect([m.getFontSize(0, 1), m.getFontFamily(0, 1)]).toEqual([20, "Georgia"]);
+		setFontSize(m, r("A1:B1"), null);
+		setFontFamily(m, r("A1:B1"), null);
+		expect([m.getFontSize(0, 1), m.getFontFamily(0, 1)]).toEqual([14, null]);
+		expect(m.styles).toEqual([]);
+	});
+
+	it("toggles subscript and superscript, which exclude each other", () => {
+		const m = grid();
+		run("subscript", m, "A1:B1");
+		expect(m.getStyle(0, 1).script).toBe("sub");
+		expect(action("subscript").isChecked!(m, r("A1"))).toBe(true);
+		run("superscript", m, "A1:B1");
+		expect(m.getStyle(0, 1).script).toBe("sup");
+		expect(action("subscript").isChecked!(m, r("A1"))).toBe(false);
+		run("superscript", m, "A1:B1");
+		expect(m.getStyle(0, 1).script).toBeUndefined();
 		expect(m.styles).toEqual([]);
 	});
 

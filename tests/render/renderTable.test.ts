@@ -264,6 +264,53 @@ describe("line height", () => {
 	});
 });
 
+describe("font", () => {
+	it("leaves the font to the stylesheet without any setting", async () => {
+		const table = await renderTable(model({ rows: [["a"]] }), container, fakeMarkdown);
+		const td = table.rows[0]!.cells[0]!;
+		expect(td.style.fontSize).toBe("");
+		expect(td.style.fontFamily).toBe("");
+		expect(td.className).toBe("");
+	});
+
+	it("applies the table default and cell overrides inline", async () => {
+		const table = await renderTable(
+			model({
+				rows: [["a", "b"]],
+				fontSize: 14,
+				fontFamily: "Georgia, serif",
+				styles: [{ range: "B1", fontSize: 20, fontFamily: "var(--font-monospace)" }],
+			}),
+			container,
+			fakeMarkdown,
+		);
+		const [a, b] = Array.from(table.rows[0]!.cells);
+		expect(a!.style.fontSize).toBe("14px");
+		expect(a!.style.fontFamily).toBe("Georgia, serif");
+		expect(a!.classList.contains("has-font-family")).toBe(true);
+		expect(b!.style.fontSize).toBe("20px");
+		expect(b!.style.fontFamily).toBe("var(--font-monospace)");
+	});
+
+	it("marks subscript and superscript cells without touching vertical-align", async () => {
+		const table = await renderTable(
+			model({
+				rows: [["a", "b"]],
+				styles: [
+					{ range: "A1", script: "sub", valign: "bottom" },
+					{ range: "B1", script: "sup" },
+				],
+			}),
+			container,
+			fakeMarkdown,
+		);
+		const [a, b] = Array.from(table.rows[0]!.cells);
+		expect(a!.classList.contains("is-sub")).toBe(true);
+		expect(a!.style.verticalAlign).toBe("bottom");
+		expect(b!.classList.contains("is-sup")).toBe(true);
+	});
+});
+
 describe("borders", () => {
 	it("leaves borders to the stylesheet without any setting", async () => {
 		const table = await renderTable(model({ rows: [["a"]] }), container, fakeMarkdown);

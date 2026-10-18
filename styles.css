@@ -114,6 +114,25 @@
 	line-height: var(--dream-table-line-height);
 }
 
+/* A cell's font family also reaches its headings, which the theme gives their own font. */
+.dream-table-wrapper .dream-table td.has-font-family :is(h1, h2, h3, h4, h5, h6) {
+	font-family: inherit;
+}
+
+/* Whole-cell subscript and superscript: smaller text, shifted down or up. */
+.dream-table td:is(.is-sub, .is-sup) > :not(.dream-table-collapse, .dream-table-input) {
+	position: relative;
+	font-size: 0.75em;
+}
+
+.dream-table td.is-sub > :not(.dream-table-collapse, .dream-table-input) {
+	top: 0.35em;
+}
+
+.dream-table td.is-sup > :not(.dream-table-collapse, .dream-table-input) {
+	top: -0.45em;
+}
+
 .dream-table td li {
 	margin-block: 0;
 }
@@ -234,7 +253,7 @@
 	overflow-wrap: anywhere;
 }
 
-/* ------------------------------------- value pickers (padding, line height) */
+/* ------------------------- value pickers (padding, line height, font) */
 
 .dream-table-value-presets {
 	display: flex;
@@ -253,6 +272,10 @@
 
 .dream-table-value-custom input {
 	width: 5em;
+}
+
+.dream-table-font-family-custom input {
+	width: 14em;
 }
 
 .dream-table-value-custom input.is-invalid {

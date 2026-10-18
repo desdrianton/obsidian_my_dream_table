@@ -36,6 +36,14 @@ export function serializeTable(data: TableData): string {
 		lines.push(`lineHeight: ${data.lineHeight}`);
 	}
 
+	if (data.fontSize !== undefined) {
+		lines.push(`fontSize: ${data.fontSize}`);
+	}
+
+	if (data.fontFamily !== undefined) {
+		lines.push(`fontFamily: ${quote(data.fontFamily)}`);
+	}
+
 	if (data.border && Object.keys(data.border).length > 0) {
 		const parts: string[] = [];
 		if (data.border.color !== undefined) parts.push(`color: ${quote(data.border.color)}`);

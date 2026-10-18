@@ -67,13 +67,17 @@ export async function renderTable(
 				td.rowSpan = merge.bottom - merge.top + 1;
 				td.colSpan = merge.right - merge.left + 1;
 			}
-			// Padding and line height are resolved per cell (own style, else the
-			// table default) and set inline, so theme rules cannot override them.
+			// Padding, line height and font are resolved per cell (own style, else
+			// the table default) and set inline, so theme rules cannot override them.
 			const style = { ...model.getStyle(row, col) };
 			const padding = model.getPadding(row, col);
 			const lineHeight = model.getLineHeight(row, col);
+			const fontSize = model.getFontSize(row, col);
+			const fontFamily = model.getFontFamily(row, col);
 			if (padding !== null) style.padding = padding;
 			if (lineHeight !== null) style.lineHeight = lineHeight;
+			if (fontSize !== null) style.fontSize = fontSize;
+			if (fontFamily !== null) style.fontFamily = fontFamily;
 			applyCellStyle(td, style);
 			applyCellBorder(td, model.getBorder(row, col));
 
@@ -173,6 +177,14 @@ export function applyCellStyle(el: HTMLElement, style: ResolvedStyle): void {
 		el.style.setProperty(LINE_HEIGHT_VAR, String(style.lineHeight));
 		el.classList.add("has-line-height");
 	}
+	if (style.fontSize !== undefined) el.style.fontSize = `${style.fontSize}px`;
+	if (style.fontFamily !== undefined) {
+		el.style.fontFamily = style.fontFamily;
+		// Headings inside otherwise keep the theme's heading font.
+		el.classList.add("has-font-family");
+	}
+	// Not `vertical-align`, which the cell already uses for `valign`.
+	if (style.script) el.classList.add(`is-${style.script}`);
 }
 
 /** Shows parse errors in place of the table. */

@@ -14,9 +14,19 @@ import {
 	type MarkdownPostProcessorContext,
 } from "obsidian";
 import { CODE_BLOCK_LANGUAGE, createStarterTable, parseCodeBlock, toCodeBlock } from "./codeblock";
-import { setBorder, setColor, setLineHeight, setPadding, TABLE_ACTIONS, type TableAction } from "./editor/actions";
+import {
+	setBorder,
+	setColor,
+	setFontFamily,
+	setFontSize,
+	setLineHeight,
+	setPadding,
+	TABLE_ACTIONS,
+	type TableAction,
+} from "./editor/actions";
 import { buildBorderPicker } from "./editor/borderPicker";
 import { buildLineHeightPicker, buildPaddingPicker } from "./editor/paddingPicker";
+import { buildFontFamilyPicker, buildFontSizePicker } from "./editor/fontPicker";
 import { BACKGROUND_SWATCHES, buildColorPicker, TEXT_SWATCHES, type Swatch } from "./editor/colorPicker";
 import { SHORTCUT_KEYS, TableEditor, type EditorState } from "./editor/TableEditor";
 import { serializeTable } from "./model/serialize";
@@ -408,6 +418,26 @@ class DreamTableView extends MarkdownRenderChild {
 
 		// Cell-level settings, each overriding the table-level one below.
 		menu.addSeparator();
+		pickerItem("Cell font…", "type", (el, close) =>
+			buildFontFamilyPicker(el, {
+				current: style.fontFamily ?? null,
+				resetLabel: "Use table font",
+				onPick: (fontFamily) => {
+					close();
+					apply((m) => setFontFamily(m, range, fontFamily));
+				},
+			}),
+		);
+		pickerItem("Cell font size…", "a-large-small", (el, close) =>
+			buildFontSizePicker(el, {
+				current: style.fontSize ?? null,
+				resetLabel: "Use table font size",
+				onPick: (fontSize) => {
+					close();
+					apply((m) => setFontSize(m, range, fontSize));
+				},
+			}),
+		);
 		pickerItem("Cell padding…", "square-dashed", (el, close) =>
 			buildPaddingPicker(el, {
 				current: style.padding ?? null,
@@ -444,6 +474,30 @@ class DreamTableView extends MarkdownRenderChild {
 		);
 
 		menu.addSeparator();
+		pickerItem("Table font…", "type", (el, close) =>
+			buildFontFamilyPicker(el, {
+				current: model.tableFontFamily,
+				resetLabel: "Theme default",
+				onPick: (fontFamily) => {
+					close();
+					apply((m) => {
+						m.tableFontFamily = fontFamily;
+					});
+				},
+			}),
+		);
+		pickerItem("Table font size…", "a-large-small", (el, close) =>
+			buildFontSizePicker(el, {
+				current: model.tableFontSize,
+				resetLabel: "Theme default",
+				onPick: (fontSize) => {
+					close();
+					apply((m) => {
+						m.tableFontSize = fontSize;
+					});
+				},
+			}),
+		);
 		pickerItem("Table padding…", "table", (el, close) =>
 			buildPaddingPicker(el, {
 				current: model.tablePadding,
