@@ -1,5 +1,5 @@
 import { CODE_BLOCK_LANGUAGE } from "./codeblock";
-import type { BlockLocation } from "./writeback";
+import { planBodyEdit, type BlockLocation } from "./writeback";
 
 /** Callout (`>`) and indentation prefix, then a fence and its info string. */
 const FENCE = /^(?:[ \t]*>)*[ \t]*(`{3,}|~{3,})(.*)$/;
@@ -40,4 +40,32 @@ export function findTableBlock(
 		}
 	}
 	return line <= lineEnd ? { lineStart, lineEnd } : null;
+}
+
+/**
+ * Where the dreamtable block whose body is `expectedBody` is now. Text
+ * typed above a table moves it without re-rendering it, so the location it
+ * was rendered at goes stale. Prefers `hint`, then the matching block
+ * nearest to it.
+ */
+export function locateTableBlock(
+	lines: readonly string[],
+	hint: BlockLocation,
+	expectedBody: string,
+): BlockLocation | null {
+	const matches = (location: BlockLocation) => planBodyEdit(lines, location, expectedBody, expectedBody) !== null;
+	if (matches(hint)) return hint;
+
+	let best: BlockLocation | null = null;
+	for (let i = 0; i < lines.length; i++) {
+		const match = FENCE.exec(lines[i]!);
+		if (!match || match[2]!.trim().split(/\s/)[0] !== CODE_BLOCK_LANGUAGE) continue;
+		const block = findTableBlock((line) => lines[line]!, lines.length, i);
+		if (!block) continue;
+		if (matches(block) && (!best || Math.abs(block.lineStart - hint.lineStart) < Math.abs(best.lineStart - hint.lineStart))) {
+			best = block;
+		}
+		i = block.lineEnd;
+	}
+	return best;
 }

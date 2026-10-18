@@ -24,6 +24,7 @@ import type { TableModel } from "./model/TableModel";
 import type { Range } from "./model/types";
 import { renderErrors, renderTable, type RenderMarkdown } from "./render/renderTable";
 import { applyLineEdit, bodyLineCount, planBodyEdit, type BlockLocation } from "./writeback";
+import { locateTableBlock } from "./blocks";
 import { findScrollContainer, holdScrollPosition } from "./scroll";
 import { attachmentName, isImageExtension, toEmbed } from "./images";
 import { enterTableExtension, type TableEntry } from "./enterTable";
@@ -85,11 +86,6 @@ export default class DreamTablePlugin extends Plugin {
 		return entry && Date.now() - entry.at < STATE_HANDOFF_MS ? entry.state : undefined;
 	}
 
-	/**
-	 * Replaces a code block's body. Goes through an open editor when there is
-	 * one, so the change lands in its undo history; otherwise edits the file.
-	 * Returns false if the block no longer matches `expectedBody`.
-	 */
 	/** The editor of `sourcePath` in Live Preview or source mode, if one is open. */
 	findSourceView(sourcePath: string): MarkdownView | undefined {
 		return this.app.workspace
@@ -101,33 +97,52 @@ export default class DreamTablePlugin extends Plugin {
 			);
 	}
 
+	/**
+	 * Replaces a code block's body. Goes through an open editor when there is
+	 * one, so the change lands in its undo history; otherwise edits the file.
+	 * The block is looked up again near `location`, since text above it may
+	 * have moved it. `beforeWrite` learns where it is just before the write,
+	 * which can re-render the table straight away. Returns where the block
+	 * was, or null if no block matches `expectedBody` any more.
+	 */
 	async writeBlockBody(
 		sourcePath: string,
 		location: BlockLocation,
 		expectedBody: string,
 		newBody: string,
-	): Promise<boolean> {
+		beforeWrite?: (found: BlockLocation) => void,
+	): Promise<BlockLocation | null> {
 		const file = this.app.vault.getAbstractFileByPath(sourcePath);
-		if (!(file instanceof TFile)) return false;
+		if (!(file instanceof TFile)) return null;
+
+		/** The edit for the block's current location, if it can still be found. */
+		const plan = (lines: string[]) => {
+			const found = locateTableBlock(lines, location, expectedBody);
+			const edit = found && planBodyEdit(lines, found, expectedBody, newBody);
+			return found && edit ? { found, edit } : null;
+		};
 
 		const view = this.findSourceView(sourcePath);
 		if (view) {
-			const edit = planBodyEdit(view.editor.getValue().split("\n"), location, expectedBody, newBody);
-			if (!edit) return false;
+			const planned = plan(view.editor.getValue().split("\n"));
+			if (!planned) return null;
+			const { edit } = planned;
+			beforeWrite?.(planned.found);
 			view.editor.replaceRange(
 				edit.text,
 				{ line: edit.fromLine, ch: 0 },
 				{ line: edit.toLine, ch: 0 },
 			);
-			return true;
+			return planned.found;
 		}
 
-		let written = false;
+		let written: BlockLocation | null = null;
 		await this.app.vault.process(file, (data) => {
-			const edit = planBodyEdit(data.split("\n"), location, expectedBody, newBody);
-			if (!edit) return data;
-			written = true;
-			return applyLineEdit(data, edit);
+			const planned = plan(data.split("\n"));
+			if (!planned) return data;
+			written = planned.found;
+			beforeWrite?.(planned.found);
+			return applyLineEdit(data, planned.edit);
 		});
 		return written;
 	}
@@ -250,7 +265,10 @@ class DreamTableView extends MarkdownRenderChild {
 		const view = this.plugin.findSourceView(this.ctx.sourcePath);
 		if (!view || !this.location) return false;
 		const { editor } = view;
-		const { lineStart, lineEnd } = this.location;
+		const location = locateTableBlock(editor.getValue().split("\n"), this.location, this.source);
+		if (!location) return false;
+		this.location = location;
+		const { lineStart, lineEnd } = location;
 		if (lineEnd >= editor.lineCount()) return false;
 
 		if (side === "before") {
@@ -300,18 +318,20 @@ class DreamTableView extends MarkdownRenderChild {
 		if (!this.location) return false;
 		const body = serializeTable(model.toData());
 		this.holdScroll(this.currentScrollTop());
-		this.plugin.parkState(this.stateKey(), state);
 
-		const ok = await this.plugin.writeBlockBody(this.ctx.sourcePath, this.location, this.source, body);
-		if (!ok) {
+		const written = await this.plugin.writeBlockBody(this.ctx.sourcePath, this.location, this.source, body, (found) => {
+			this.location = found;
+			this.plugin.parkState(this.stateKey(), state);
+		});
+		if (!written) {
 			new Notice("Dream Table: this table was changed elsewhere. Close and reopen the note, then try again.");
 			return false;
 		}
 		// Obsidian re-renders shortly; until then, further edits must match what we just wrote.
 		this.source = body;
 		this.location = {
-			lineStart: this.location.lineStart,
-			lineEnd: this.location.lineStart + 1 + bodyLineCount(body),
+			lineStart: written.lineStart,
+			lineEnd: written.lineStart + 1 + bodyLineCount(body),
 		};
 		return true;
 	}
