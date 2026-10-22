@@ -104,21 +104,53 @@ export function fillCells(model: TableModel, ranges: readonly Range[], value: st
 }
 
 /**
- * The last cells copied from any table. Pasting the same text back uses
- * these instead of parsing it, so a copied column of multi-line cells is
- * not mistaken for a single cell's text.
+ * Clipboard format carrying the copied cells as JSON, next to the plain
+ * text. Pasting reads the cells from it rather than parsing the text, so a
+ * cell holding a tab or a line break pastes as one cell.
+ */
+export const CELLS_FORMAT = "application/x-dream-table-cells";
+
+/**
+ * The last cells copied from any table, for when the clipboard drops
+ * CELLS_FORMAT: pasting the same text back uses these instead of parsing
+ * it, so a copied column of multi-line cells is not mistaken for a single
+ * cell's text.
  */
 let lastCopied: { text: string; cells: string[][] } | null = null;
 
-/** Remembers copied cells and returns the text to put on the clipboard. */
-export function rememberCopy(cells: string[][]): string {
+/** Puts copied cells on the clipboard, as text and as CELLS_FORMAT. */
+export function writeCells(data: DataTransfer, cells: string[][]): void {
 	const text = cells.length === 1 && cells[0]!.length === 1 ? cells[0]![0]! : toTsv(cells);
 	lastCopied = { text, cells };
-	return text;
+	data.setData("text/plain", text);
+	data.setData(CELLS_FORMAT, JSON.stringify(cells));
 }
 
-/** Copied text as cells, and whether it came from a table (rather than another app). */
-export function cellsFromClipboard(text: string): { cells: string[][]; fromTable: boolean } {
+/** Pasted cells, and whether they came from a table (rather than another app). */
+export function readCells(data: DataTransfer): { cells: string[][]; fromTable: boolean } {
+	const cells = parseCells(data.getData(CELLS_FORMAT));
+	if (cells) return { cells, fromTable: true };
+	const text = data.getData("text/plain");
 	if (lastCopied && lastCopied.text === text) return { cells: lastCopied.cells, fromTable: true };
 	return { cells: parseTsv(text), fromTable: false };
+}
+
+/** CELLS_FORMAT data as cells, or null when it is missing or malformed. */
+function parseCells(json: string): string[][] | null {
+	if (!json) return null;
+	try {
+		const cells: unknown = JSON.parse(json);
+		const valid =
+			Array.isArray(cells) &&
+			cells.length > 0 &&
+			cells.every(
+				(row) =>
+					Array.isArray(row) &&
+					row.length === (cells[0] as unknown[]).length &&
+					row.every((cell) => typeof cell === "string"),
+			);
+		return valid && (cells[0] as unknown[]).length > 0 ? (cells as string[][]) : null;
+	} catch {
+		return null;
+	}
 }

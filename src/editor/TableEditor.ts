@@ -6,7 +6,7 @@ import { appendToCell, imageFilesFrom } from "../images";
 import { setTaskChecked } from "../render/cellMarkdown";
 import { applyColumnWidths, renderTable, type RenderMarkdown } from "../render/renderTable";
 import { clearContent, isActionEnabled, runTableAction, TABLE_ACTIONS } from "./actions";
-import { cellsFromClipboard, copyCells, fillCells, pasteCells, rememberCopy } from "./clipboard";
+import { copyCells, fillCells, pasteCells, readCells, writeCells } from "./clipboard";
 import { UndoHistory, type HistoryEntry } from "./history";
 import {
 	applyToTextarea,
@@ -959,9 +959,9 @@ export class TableEditor {
 	 * text selected, copies the whole cell; selected text copies as usual.
 	 */
 	private readonly onCopy = (evt: ClipboardEvent) => {
-		const text = this.copyText();
-		if (text === null || !evt.clipboardData) return;
-		evt.clipboardData.setData("text/plain", text);
+		const cells = this.cellsToCopy();
+		if (cells === null || !evt.clipboardData) return;
+		writeCells(evt.clipboardData, cells);
 		evt.preventDefault();
 		evt.stopPropagation();
 	};
@@ -970,9 +970,9 @@ export class TableEditor {
 	private readonly onCut = (evt: ClipboardEvent) => {
 		if (this.editing) return;
 		const range = this.getSelectedRange();
-		const text = this.copyText();
-		if (!range || text === null || !evt.clipboardData) return;
-		evt.clipboardData.setData("text/plain", text);
+		const cells = this.cellsToCopy();
+		if (!range || cells === null || !evt.clipboardData) return;
+		writeCells(evt.clipboardData, cells);
 		evt.preventDefault();
 		evt.stopPropagation();
 		void this.applyChange((model) => {
@@ -982,16 +982,16 @@ export class TableEditor {
 	};
 
 	/** What Ctrl/Cmd+C copies right now, or null to leave it to the browser. */
-	private copyText(): string | null {
+	private cellsToCopy(): string[][] | null {
 		if (!this.containsFocus) return null;
 		const editing = this.editing;
 		if (editing) {
 			const { input } = editing;
 			if (input.selectionStart !== input.selectionEnd) return null;
-			return rememberCopy([[input.value]]);
+			return [[input.value]];
 		}
 		const range = this.getSelectedRange();
-		return range ? rememberCopy(copyCells(this.model, range)) : null;
+		return range ? copyCells(this.model, range) : null;
 	}
 
 	/**
@@ -1012,9 +1012,9 @@ export class TableEditor {
 			void this.insertImages(files, target);
 			return;
 		}
-		const text = evt.clipboardData?.getData("text/plain") ?? "";
-		if (text === "" || !this.selection) return;
-		const { cells, fromTable } = cellsFromClipboard(text);
+		const data = evt.clipboardData;
+		if (!data || data.getData("text/plain") === "" || !this.selection) return;
+		const { cells, fromTable } = readCells(data);
 		const single = cells.length === 1 && cells[0]!.length === 1;
 		const editing = this.editing;
 		// One cell's text, or lines from another app, go in at the caret.

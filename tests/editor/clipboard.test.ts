@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { parseRange } from "../../src/model/address";
 import { TableModel } from "../../src/model/TableModel";
 import {
-	cellsFromClipboard,
+	CELLS_FORMAT,
 	copyCells,
 	fillCells,
 	parseTsv,
 	pasteCells,
-	rememberCopy,
+	readCells,
 	toTsv,
+	writeCells,
 } from "../../src/editor/clipboard";
 
 const r = parseRange;
@@ -88,15 +89,38 @@ describe("copyCells / pasteCells / fillCells", () => {
 	});
 });
 
-describe("rememberCopy / cellsFromClipboard", () => {
+describe("writeCells / readCells", () => {
+	/** A stand-in clipboard (happy-dom has no real one). */
+	function clipboard(store: Record<string, string> = {}) {
+		return {
+			store,
+			getData: (format: string) => store[format] ?? "",
+			setData: (format: string, value: string) => void (store[format] = value),
+		} as unknown as DataTransfer & { store: Record<string, string> };
+	}
+
 	it("copies a single cell as its own text", () => {
-		expect(rememberCopy([["a\nb"]])).toBe("a\nb");
-		expect(cellsFromClipboard("a\nb")).toEqual({ cells: [["a\nb"]], fromTable: true });
+		const data = clipboard();
+		writeCells(data, [["a\nb"]]);
+		expect(data.store["text/plain"]).toBe("a\nb");
+		expect(readCells(data)).toEqual({ cells: [["a\nb"]], fromTable: true });
 	});
 
-	it("recognises text copied from a table, and parses anything else", () => {
-		const text = rememberCopy([["a"], ["b"]]);
-		expect(cellsFromClipboard(text)).toEqual({ cells: [["a"], ["b"]], fromTable: true });
-		expect(cellsFromClipboard("x\ty")).toEqual({ cells: [["x", "y"]], fromTable: false });
+	it("pastes a copied cell holding a tab as one cell", () => {
+		const data = clipboard();
+		writeCells(data, [["a\tb"]]);
+		const pasted = clipboard({ "text/plain": "a\tb", [CELLS_FORMAT]: data.store[CELLS_FORMAT]! });
+		expect(readCells(pasted)).toEqual({ cells: [["a\tb"]], fromTable: true });
+	});
+
+	it("recognises text copied from a table without the cells format, and parses anything else", () => {
+		writeCells(clipboard(), [["a"], ["b"]]);
+		expect(readCells(clipboard({ "text/plain": "a\nb" }))).toEqual({ cells: [["a"], ["b"]], fromTable: true });
+		expect(readCells(clipboard({ "text/plain": "x\ty" }))).toEqual({ cells: [["x", "y"]], fromTable: false });
+	});
+
+	it("ignores malformed cells data", () => {
+		const data = clipboard({ "text/plain": "x\ty", [CELLS_FORMAT]: '[["a"],["b","c"]]' });
+		expect(readCells(data)).toEqual({ cells: [["x", "y"]], fromTable: false });
 	});
 });

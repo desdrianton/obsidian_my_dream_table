@@ -9,6 +9,7 @@ import {
 	type EditorState,
 	type TableEditorOptions,
 } from "../../src/editor/TableEditor";
+import { CELLS_FORMAT } from "../../src/editor/clipboard";
 import { UndoHistory } from "../../src/editor/history";
 import type { RenderMarkdown } from "../../src/render/renderTable";
 
@@ -1057,7 +1058,7 @@ describe("clipboard", () => {
 			setData: (format: string, value: string) => void (store[format] = value),
 		};
 		Object.defineProperty(evt, "clipboardData", { value: data });
-		return Object.assign(evt, { text: () => store["text/plain"] });
+		return Object.assign(evt, { data, text: () => store["text/plain"] });
 	}
 
 	/** Dispatches where the browser would: the focused element (the table or its textarea). */
@@ -1172,6 +1173,27 @@ describe("clipboard", () => {
 		expect(fire("paste", "line 1\nline 2").defaultPrevented).toBe(false);
 		expect(fire("paste", "word").defaultPrevented).toBe(false);
 		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it("pastes a copied cell holding a tab into one cell", async () => {
+		await mount(grid());
+		mouse(td("A1"), "dblclick");
+		input().value = "a\tb";
+		mouse(td("B2"), "mousedown");
+		mouse(td("B2"), "mouseup");
+		await flush();
+		selectRange("A1", "A1");
+		const copy = fire("copy");
+		// Another copy since, e.g. in a reloaded plugin, so only the clipboard knows the cells.
+		selectRange("B2", "B2");
+		fire("copy");
+		selectRange("C3", "C3");
+		const paste = clipboardEvent("paste", copy.text());
+		paste.data.setData(CELLS_FORMAT, copy.data.getData(CELLS_FORMAT));
+		document.activeElement!.dispatchEvent(paste);
+		await flush();
+		const m = editor.currentModel;
+		expect([m.getCell(2, 2), m.colCount]).toEqual(["a\tb", 3]);
 	});
 
 	it("fills every selected cell with one pasted cell", async () => {
