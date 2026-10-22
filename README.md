@@ -67,6 +67,8 @@ Tables are edited where they are, in Live Preview and Reading view; every change
 - Drag across cells or Shift+click to select a range. Merged cells are always selected whole.
 - Ctrl+click (Cmd+click on macOS) adds more cells to the selection; Ctrl+drag adds a range. Ctrl+click a selected cell again to deselect it. Formatting then applies to every selected cell; merging and inserting or deleting rows and columns need a single range.
 - Shift+arrow grows the selection; Delete or Backspace clears the selected cells; an arrow key or Escape goes back to editing a single cell.
+- Ctrl+C / Ctrl+X (Cmd on macOS) copy / cut the selected cells as tab-separated text, so they paste into another Dream Table or a spreadsheet. In an open cell with no text selected, Ctrl+C copies the whole cell.
+- Ctrl+V pastes copied cells (from a Dream Table or a spreadsheet) starting at the selected cell, adding rows and columns if they do not fit; one copied cell pasted onto several selected cells fills them all. In an open cell, ordinary text is pasted at the caret.
 
 **Right-click menu** (acts on the selection)
 - *Merge cells* / *Unmerge cells*

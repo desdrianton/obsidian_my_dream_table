@@ -6,6 +6,7 @@ import { appendToCell, imageFilesFrom } from "../images";
 import { setTaskChecked } from "../render/cellMarkdown";
 import { applyColumnWidths, renderTable, type RenderMarkdown } from "../render/renderTable";
 import { clearContent, isActionEnabled, runTableAction, TABLE_ACTIONS } from "./actions";
+import { cellsFromClipboard, copyCells, fillCells, pasteCells, rememberCopy } from "./clipboard";
 import {
 	applyToTextarea,
 	indentLines,
@@ -156,10 +157,14 @@ export class TableEditor {
 		this.root.addEventListener("keydown", this.onKeyDown);
 		this.root.addEventListener("focusin", this.onFocusIn);
 		this.root.addEventListener("focusout", this.onFocusOut);
-		this.root.addEventListener("paste", this.onPaste);
 		this.root.addEventListener("dragover", this.onDragOver);
 		this.root.addEventListener("drop", this.onDrop);
 		this.doc.addEventListener("mouseup", this.onMouseUp);
+		// On the document, because with no cell open the browser may send
+		// these to the note's text instead of the focused table.
+		this.doc.addEventListener("copy", this.onCopy, true);
+		this.doc.addEventListener("cut", this.onCut, true);
+		this.doc.addEventListener("paste", this.onPaste, true);
 		// Capture phase, so a click is seen even if the note editor stops it.
 		this.doc.addEventListener("mousedown", this.onDocumentMouseDown, true);
 		this.doc.addEventListener("mousemove", this.onDocumentMouseMove);
@@ -177,6 +182,9 @@ export class TableEditor {
 		}
 		this.renderToken++;
 		this.doc.removeEventListener("mouseup", this.onMouseUp);
+		this.doc.removeEventListener("copy", this.onCopy, true);
+		this.doc.removeEventListener("cut", this.onCut, true);
+		this.doc.removeEventListener("paste", this.onPaste, true);
 		this.doc.removeEventListener("mousedown", this.onDocumentMouseDown, true);
 		this.doc.removeEventListener("mousemove", this.onDocumentMouseMove);
 		this.doc.removeEventListener("focusin", this.onDocumentFocusIn);
@@ -598,7 +606,9 @@ export class TableEditor {
 		// Keep the browser from starting a text selection or moving the editor cursor.
 		evt.preventDefault();
 		evt.stopPropagation();
-		const committed = this.editing ? this.commitEdit() : Promise.resolve();
+		// Save without reopening: a plain click opens the cell on mouseup, and
+		// reopening here would leave it open while the drag selects more cells.
+		const committed = this.editing ? this.commitEdit(0, 0, true, false) : Promise.resolve();
 		this.clickedCell = null;
 		// Dragging after Ctrl/Cmd+click grows the new range, unless the click deselected the cell.
 		if ((evt.ctrlKey || evt.metaKey) && !evt.shiftKey) this.dragging = this.toggleCell(cell);
@@ -862,18 +872,87 @@ export class TableEditor {
 		return false;
 	}
 
-	// --------------------------------------------------------------- images
+	// ------------------------------------------------------------ clipboard
 
-	/** Image pastes: at the cursor while editing, else appended to the focused cell. */
-	private readonly onPaste = (evt: ClipboardEvent) => {
-		const files = imageFilesFrom(evt.clipboardData);
-		if (files.length === 0 || !this.options.onInsertFiles) return;
-		const target = this.editing?.cell ?? this.selection?.focus;
-		if (!target) return;
+	/**
+	 * Copies the selected cells (the active range) as tab-separated text, so
+	 * they paste into another table or a spreadsheet. In an open cell with no
+	 * text selected, copies the whole cell; selected text copies as usual.
+	 */
+	private readonly onCopy = (evt: ClipboardEvent) => {
+		const text = this.copyText();
+		if (text === null || !evt.clipboardData) return;
+		evt.clipboardData.setData("text/plain", text);
 		evt.preventDefault();
 		evt.stopPropagation();
-		void this.insertImages(files, target);
 	};
+
+	/** Copies the selected cells, then clears them (not while a cell is open). */
+	private readonly onCut = (evt: ClipboardEvent) => {
+		if (this.editing) return;
+		const range = this.getSelectedRange();
+		const text = this.copyText();
+		if (!range || text === null || !evt.clipboardData) return;
+		evt.clipboardData.setData("text/plain", text);
+		evt.preventDefault();
+		evt.stopPropagation();
+		void this.applyChange((model) => {
+			clearContent(model, range);
+			return range;
+		});
+	};
+
+	/** What Ctrl/Cmd+C copies right now, or null to leave it to the browser. */
+	private copyText(): string | null {
+		if (!this.containsFocus) return null;
+		const editing = this.editing;
+		if (editing) {
+			const { input } = editing;
+			if (input.selectionStart !== input.selectionEnd) return null;
+			return rememberCopy([[input.value]]);
+		}
+		const range = this.getSelectedRange();
+		return range ? rememberCopy(copyCells(this.model, range)) : null;
+	}
+
+	/**
+	 * Pastes images (see insertImages) and copied cells. Several cells are
+	 * written from the selected cell (or the open one) rightwards and down;
+	 * one cell pasted onto several selected cells fills them all. In an open
+	 * cell, text that is not a block of cells is pasted as usual.
+	 */
+	private readonly onPaste = (evt: ClipboardEvent) => {
+		if (!this.containsFocus) return;
+		const files = imageFilesFrom(evt.clipboardData);
+		if (files.length > 0) {
+			if (!this.options.onInsertFiles) return;
+			const target = this.editing?.cell ?? this.selection?.focus;
+			if (!target) return;
+			evt.preventDefault();
+			evt.stopPropagation();
+			void this.insertImages(files, target);
+			return;
+		}
+		const text = evt.clipboardData?.getData("text/plain") ?? "";
+		if (text === "" || !this.selection) return;
+		const { cells, fromTable } = cellsFromClipboard(text);
+		const single = cells.length === 1 && cells[0]!.length === 1;
+		const editing = this.editing;
+		// One cell's text, or lines from another app, go in at the caret.
+		if (editing && (single || (!fromTable && cells[0]!.length === 1))) return;
+		evt.preventDefault();
+		evt.stopPropagation();
+		this.editing = null;
+		const ranges = this.getSelectedRanges();
+		const at = snapToAnchor(this.model, editing?.cell ?? { row: ranges[0]!.top, col: ranges[0]!.left });
+		void this.applyChange((model) => {
+			if (!single) return pasteCells(model, at, cells);
+			fillCells(model, ranges, cells[0]![0]!);
+			return ranges;
+		});
+	};
+
+	// --------------------------------------------------------------- images
 
 	/** Allows dropping files on cells (the browser would otherwise open them). */
 	private readonly onDragOver = (evt: DragEvent) => {

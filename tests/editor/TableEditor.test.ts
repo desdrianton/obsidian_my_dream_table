@@ -944,13 +944,154 @@ describe("host shortcuts", () => {
 	});
 });
 
+describe("clipboard", () => {
+	/** A copy, cut or paste event with a stand-in clipboard (happy-dom has no real one). */
+	function clipboardEvent(type: "copy" | "cut" | "paste", text = "") {
+		const evt = new Event(type, { bubbles: true, cancelable: true });
+		const store: Record<string, string> = { "text/plain": text };
+		const data = {
+			files: [],
+			types: ["text/plain"],
+			getData: (format: string) => store[format] ?? "",
+			setData: (format: string, value: string) => void (store[format] = value),
+		};
+		Object.defineProperty(evt, "clipboardData", { value: data });
+		return Object.assign(evt, { text: () => store["text/plain"] });
+	}
+
+	/** Dispatches where the browser would: the focused element (the table or its textarea). */
+	function fire(type: "copy" | "cut" | "paste", text = "") {
+		const evt = clipboardEvent(type, text);
+		(document.activeElement ?? document.body).dispatchEvent(evt);
+		return evt;
+	}
+
+	function selectRange(from: string, to: string) {
+		mouse(td(from), "mousedown");
+		mouse(td(to), "mouseover");
+		mouse(td(to), "mouseup");
+	}
+
+	it("copies the selected cells as tab-separated text", async () => {
+		await mount(grid());
+		selectRange("A1", "B2");
+		const evt = fire("copy");
+		expect(evt.defaultPrevented).toBe(true);
+		expect(evt.text()).toBe("A1\tB1\nA2\tB2");
+	});
+
+	it("copies every dragged cell when the drag starts from an open cell", async () => {
+		await mount(grid());
+		mouse(td("A1"), "dblclick");
+		mouse(td("B1"), "mousedown");
+		// The previous cell is saved and the table re-rendered mid-drag.
+		await flush();
+		mouse(td("C2"), "mouseover");
+		mouse(td("C2"), "mouseup");
+		await flush();
+		expect(editor.isEditing).toBe(false);
+		expect(fire("copy").text()).toBe("B1\tC1\nB2\tC2");
+	});
+
+	it("catches copies the browser sends elsewhere while the table has focus", async () => {
+		await mount(grid());
+		selectRange("A1", "A2");
+		const evt = clipboardEvent("copy");
+		document.body.dispatchEvent(evt);
+		expect(evt.text()).toBe("A1\nA2");
+	});
+
+	it("ignores copies while the table does not have focus", async () => {
+		await mount(grid());
+		selectRange("A1", "A2");
+		const outside = document.body.appendChild(document.createElement("input"));
+		outside.focus();
+		const evt = clipboardEvent("copy");
+		outside.dispatchEvent(evt);
+		expect(evt.defaultPrevented).toBe(false);
+	});
+
+	it("copies the whole open cell when no text is selected, and selected text as usual", async () => {
+		await mount(grid());
+		mouse(td("B2"), "dblclick");
+		input().setSelectionRange(1, 1);
+		expect(fire("copy").text()).toBe("B2");
+		input().setSelectionRange(0, 1);
+		expect(fire("copy").defaultPrevented).toBe(false);
+	});
+
+	it("cuts the selected cells", async () => {
+		await mount(grid());
+		selectRange("A1", "B1");
+		expect(fire("cut").text()).toBe("A1\tB1");
+		await flush();
+		expect(editor.currentModel.getCell(0, 0)).toBe("");
+		expect(editor.currentModel.getCell(0, 1)).toBe("");
+		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+
+	it("pastes copied cells from the top-left of the selection", async () => {
+		await mount(grid());
+		selectRange("A1", "B2");
+		const text = fire("copy").text();
+		selectRange("B2", "C3");
+		expect(fire("paste", text).defaultPrevented).toBe(true);
+		await flush();
+		const m = editor.currentModel;
+		expect([m.getCell(1, 1), m.getCell(1, 2), m.getCell(2, 1), m.getCell(2, 2)]).toEqual(["A1", "B1", "A2", "B2"]);
+		expect(selected()).toBe("B2:C3");
+	});
+
+	it("pastes a block of cells into the open cell, growing the table", async () => {
+		await mount(grid());
+		mouse(td("C3"), "dblclick");
+		input().value = "unsaved";
+		fire("paste", "x\ty\nz\tw");
+		await flush();
+		const m = editor.currentModel;
+		expect([m.rowCount, m.colCount]).toEqual([4, 4]);
+		expect([m.getCell(2, 2), m.getCell(2, 3), m.getCell(3, 2), m.getCell(3, 3)]).toEqual(["x", "y", "z", "w"]);
+		expect(selected()).toBe("C3:D4");
+	});
+
+	it("pastes a copied column into the open cell as cells", async () => {
+		await mount(grid());
+		selectRange("A1", "A2");
+		const text = fire("copy").text();
+		mouse(td("C1"), "dblclick");
+		fire("paste", text);
+		await flush();
+		expect(editor.currentModel.getCell(0, 2)).toBe("A1");
+		expect(editor.currentModel.getCell(1, 2)).toBe("A2");
+	});
+
+	it("leaves plain text pastes in the open cell to the browser", async () => {
+		await mount(grid());
+		mouse(td("A1"), "dblclick");
+		expect(fire("paste", "line 1\nline 2").defaultPrevented).toBe(false);
+		expect(fire("paste", "word").defaultPrevented).toBe(false);
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it("fills every selected cell with one pasted cell", async () => {
+		await mount(grid());
+		selectRange("A1", "B1");
+		mouse(td("C3"), "mousedown", { ctrlKey: true });
+		mouse(td("C3"), "mouseup");
+		fire("paste", "v");
+		await flush();
+		const m = editor.currentModel;
+		expect([m.getCell(0, 0), m.getCell(0, 1), m.getCell(2, 2), m.getCell(1, 1)]).toEqual(["v", "v", "v", "B2"]);
+	});
+});
+
 describe("images", () => {
 	const png = () => new File(["x"], "image.png", { type: "image/png" });
 
 	/** A paste or drop event carrying files (happy-dom has no real clipboard). */
 	function transferEvent(type: "paste" | "drop" | "dragover", files: File[], types = ["Files"]) {
 		const evt = new Event(type, { bubbles: true, cancelable: true });
-		const data = { files, types, dropEffect: "none" };
+		const data = { files, types, dropEffect: "none", getData: () => "" };
 		Object.defineProperty(evt, type === "paste" ? "clipboardData" : "dataTransfer", { value: data });
 		return evt;
 	}
