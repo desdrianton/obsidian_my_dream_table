@@ -211,6 +211,7 @@
 	min-width: 8em;
 	min-height: 100%;
 	resize: none;
+	overflow: hidden;
 	border: none;
 	border-radius: 0;
 	margin: 0;

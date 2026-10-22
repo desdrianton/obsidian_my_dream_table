@@ -398,16 +398,20 @@ export class TableEditor {
 		const input = this.doc.createElement("textarea");
 		input.className = "dream-table-input";
 		input.value = initialText ?? this.model.getCell(target.row, target.col);
-		input.rows = Math.max(1, input.value.split("\n").length);
+		// Sized to its content, wrapped lines included, so it never scrolls.
+		input.rows = 1;
+		const fit = () => {
+			input.style.height = "auto";
+			input.style.height = `${input.scrollHeight}px`;
+		};
 		input.addEventListener("keydown", this.onInputKeyDown);
-		input.addEventListener("input", () => {
-			input.rows = Math.max(1, input.value.split("\n").length);
-		});
+		input.addEventListener("input", fit);
 		// Focus went elsewhere (another app, the note), so do not take it back.
 		input.addEventListener("blur", () => void this.commitEdit(0, 0, true, false));
 
 		td.replaceChildren(input);
 		td.classList.add("is-editing");
+		fit();
 		this.editing = { cell: target, input };
 		input.focus();
 		const end = input.value.length;
