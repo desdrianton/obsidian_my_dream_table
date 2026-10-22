@@ -68,7 +68,8 @@ export function bodyLineCount(body: string): number {
 	return normalizeBody(body).split("\n").length;
 }
 
-function normalizeBody(body: string): string {
+/** A body without "\r" or trailing line breaks, as it is compared and written. */
+export function normalizeBody(body: string): string {
 	return body.replace(/\r\n/g, "\n").replace(/\n+$/, "");
 }
 

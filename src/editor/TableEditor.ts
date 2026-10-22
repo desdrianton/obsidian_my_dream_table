@@ -7,6 +7,7 @@ import { setTaskChecked } from "../render/cellMarkdown";
 import { applyColumnWidths, renderTable, type RenderMarkdown } from "../render/renderTable";
 import { clearContent, isActionEnabled, runTableAction, TABLE_ACTIONS } from "./actions";
 import { cellsFromClipboard, copyCells, fillCells, pasteCells, rememberCopy } from "./clipboard";
+import { UndoHistory, type HistoryEntry } from "./history";
 import {
 	applyToTextarea,
 	indentLines,
@@ -66,6 +67,11 @@ export interface TableEditorOptions {
 	 * the table and returns true, or returns false to stay in the table.
 	 */
 	onExit?: (side: "before" | "after") => boolean;
+	/**
+	 * Where saved changes are recorded for undo. Hosts that re-create the
+	 * editor on every save pass the same history to each one.
+	 */
+	history?: UndoHistory;
 	initialState?: EditorState;
 }
 
@@ -125,6 +131,7 @@ export class TableEditor {
 	private hasFocus = false;
 	private focusAfterRender: boolean;
 	private scrollAfterRender: { top: number; left: number } | null;
+	private readonly history: UndoHistory;
 	private readonly doc: Document;
 
 	constructor(
@@ -133,6 +140,7 @@ export class TableEditor {
 		private readonly options: TableEditorOptions,
 	) {
 		this.model = model;
+		this.history = options.history ?? new UndoHistory();
 		this.doc = container.ownerDocument;
 		this.root = this.doc.createElement("div");
 		this.root.className = "dream-table-editor";
@@ -524,18 +532,18 @@ export class TableEditor {
 	 * Runs a mutation on a copy of the model. The returned range (if any)
 	 * becomes the new selection; an array of ranges selects all of them, the
 	 * first being the active one. Rolls back if the mutation throws or
-	 * `onChange` reports that saving failed. `keepFocus` false lets the
-	 * re-rendered table leave focus where the user put it; `reopen` opens
-	 * the selected cell for editing once it is re-rendered.
+	 * `onChange` reports that saving failed; a saved change can be undone.
+	 * `keepFocus` false lets the re-rendered table leave focus where the
+	 * user put it; `reopen` opens the selected cell for editing once it is
+	 * re-rendered.
 	 */
 	async applyChange(
 		mutate: (model: TableModel) => Range | Range[] | void,
 		keepFocus = true,
 		reopen = false,
 	): Promise<boolean> {
-		const previous = this.model;
-		const previousSelection = this.selection;
-		const next = previous.clone();
+		const previous: HistoryEntry = { model: this.model, selection: this.selection };
+		const next = previous.model.clone();
 		let range: Range | Range[] | void;
 		try {
 			range = mutate(next);
@@ -544,13 +552,33 @@ export class TableEditor {
 			return false;
 		}
 
+		const saved = await this.replaceModel(
+			next,
+			() => {
+				if (Array.isArray(range)) return range.length > 0 ? this.selectionOf(range) : this.selection;
+				return range ? this.selectionOf([range]) : this.selection;
+			},
+			keepFocus,
+			reopen,
+		);
+		if (saved) this.history.record(previous);
+		return saved;
+	}
+
+	/**
+	 * Shows `next` with the selection `select` returns (called once `next`
+	 * is the current model) and saves it, going back if saving fails.
+	 */
+	private async replaceModel(
+		next: TableModel,
+		select: () => Selection | null,
+		keepFocus: boolean,
+		reopen: boolean,
+	): Promise<boolean> {
+		const previous = this.model;
+		const previousSelection = this.selection;
 		this.model = next;
-		if (Array.isArray(range)) {
-			if (range.length > 0) this.selection = this.selectionOf(range);
-		} else if (range) {
-			this.selection = this.selectionOf([range]);
-		}
-		this.selection = this.clampSelection(this.selection);
+		this.selection = this.clampSelection(select());
 
 		// Changes come from interacting with this table, so it should usually keep focus.
 		const state: EditorState = { ...this.state, focused: keepFocus };
@@ -570,6 +598,46 @@ export class TableEditor {
 		this.selection = previousSelection;
 		await this.render();
 		return false;
+	}
+
+	/** Puts back the table as it was before the last saved change, with its selection. */
+	undo(): Promise<boolean> {
+		return this.travel("undo");
+	}
+
+	/** Makes the last undone change again. */
+	redo(): Promise<boolean> {
+		return this.travel("redo");
+	}
+
+	private async travel(direction: "undo" | "redo"): Promise<boolean> {
+		const current: HistoryEntry = { model: this.model, selection: this.selection };
+		const entry = direction === "undo" ? this.history.undo(current) : this.history.redo(current);
+		if (!entry) return false;
+		// The open cell holds nothing unsaved (see handleUndo); the change re-renders it.
+		this.editing = null;
+		this.caretAtStart = false;
+		const saved = await this.replaceModel(entry.model, () => entry.selection, true, true);
+		// Not saved: step the history back the other way.
+		if (saved) return true;
+		if (direction === "undo") this.history.redo(entry);
+		else this.history.undo(entry);
+		return false;
+	}
+
+	/**
+	 * Ctrl/Cmd+Z, or with `redo` Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y. In an open
+	 * cell whose text has changed, returns false to leave it to the
+	 * textarea's own undo; otherwise undoes or redoes a change to the table.
+	 */
+	handleUndo(redo: boolean): boolean {
+		const editing = this.editing;
+		if (editing) {
+			const changed = editing.input.value !== this.model.getCell(editing.cell.row, editing.cell.col);
+			if (changed || (redo && !this.history.canRedo)) return false;
+		}
+		void (redo ? this.redo() : this.undo());
+		return true;
 	}
 
 	/** Runs one of TABLE_ACTIONS on the current selection (all of its ranges). */
@@ -798,6 +866,11 @@ export class TableEditor {
 			if (!evt.defaultPrevented) this.handleShortcut(shortcut);
 			return true;
 		}
+		const redo = undoKey(evt);
+		if (redo !== null) {
+			if (!evt.defaultPrevented) this.handleUndo(redo);
+			return true;
+		}
 		// Typing a character starts editing and replaces the content, like a spreadsheet.
 		if (evt.key.length === 1 && !mod && !evt.altKey && this.selection) {
 			this.startEdit(undefined, evt.key);
@@ -812,6 +885,12 @@ export class TableEditor {
 		if (shortcut) {
 			if (!evt.defaultPrevented) this.handleShortcut(shortcut);
 			evt.preventDefault();
+			return;
+		}
+		const redo = undoKey(evt);
+		if (redo !== null) {
+			// Left to the textarea while it has its own edits to undo.
+			if (!evt.defaultPrevented && this.handleUndo(redo)) evt.preventDefault();
 			return;
 		}
 		const input = evt.currentTarget as HTMLTextAreaElement;
@@ -1151,6 +1230,15 @@ function shortcutKey(evt: KeyboardEvent): ShortcutKey | null {
 	if (!(evt.ctrlKey || evt.metaKey) || evt.altKey || evt.shiftKey) return null;
 	const key = evt.key.toLowerCase();
 	return (SHORTCUT_KEYS as readonly string[]).includes(key) ? (key as ShortcutKey) : null;
+}
+
+/** Whether a key event is undo (false), redo (true), or neither (null). */
+function undoKey(evt: KeyboardEvent): boolean | null {
+	if (!(evt.ctrlKey || evt.metaKey) || evt.altKey) return null;
+	const key = evt.key.toLowerCase();
+	if (key === "z") return evt.shiftKey;
+	if (key === "y" && !evt.shiftKey) return true;
+	return null;
 }
 
 /** Markdown formatting shortcuts inside the cell editor, matching Obsidian's defaults. */

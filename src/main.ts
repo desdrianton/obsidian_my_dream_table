@@ -5,6 +5,7 @@ import {
 	MarkdownView,
 	Menu,
 	Modal,
+	type Modifier,
 	Notice,
 	Plugin,
 	Scope,
@@ -40,6 +41,7 @@ import { buildMaxHeightPicker, buildMaxWidthPicker } from "./editor/sizePicker";
 import { buildFontFamilyPicker, buildFontSizePicker } from "./editor/fontPicker";
 import { BACKGROUND_SWATCHES, buildColorPicker, TEXT_SWATCHES, type Swatch } from "./editor/colorPicker";
 import { SHORTCUT_KEYS, TableEditor, type EditorState } from "./editor/TableEditor";
+import { HistoryStore, type TableHistory } from "./editor/history";
 import { serializeTable } from "./model/serialize";
 import type { TableModel } from "./model/TableModel";
 import type { Range } from "./model/types";
@@ -66,6 +68,8 @@ export default class DreamTablePlugin extends Plugin {
 	private readonly handoff = new Map<string, { state: () => EditorState; at: number }>();
 	/** Rendered tables, so the note's cursor can hand focus to one. */
 	readonly tables = new Set<DreamTableView>();
+	/** Undo histories, which outlive the views re-created on every save. */
+	readonly histories = new HistoryStore();
 
 	override async onload(): Promise<void> {
 		this.registerMarkdownCodeBlockProcessor(CODE_BLOCK_LANGUAGE, (source, el, ctx) => {
@@ -228,6 +232,7 @@ class DreamTableView extends MarkdownRenderChild {
 	private scopePushed = false;
 	/** The editor's state when this view was unloaded, for a late handoff. */
 	private lastState: EditorState | null = null;
+	private history: TableHistory | null = null;
 
 	constructor(
 		private readonly plugin: DreamTablePlugin,
@@ -268,6 +273,30 @@ class DreamTableView extends MarkdownRenderChild {
 			void this.editor.commitAndInsertRow();
 			return false;
 		});
+		// Undo and redo the table's changes. While an open cell has unsaved
+		// text, they are left to its textarea (returning true lets it see them).
+		const undoHandled = new WeakMap<KeyboardEvent, boolean>();
+		const undoKeys: [Modifier[], string, boolean][] = [
+			[["Mod"], "z", false],
+			[["Mod", "Shift"], "z", true],
+			[["Mod"], "y", true],
+		];
+		for (const [modifiers, key, redo] of undoKeys) {
+			for (const variant of [key, key.toUpperCase()]) {
+				this.scope.register(modifiers, variant, (evt) => {
+					if (!this.editor?.containsFocus) {
+						this.setScopeActive(false);
+						return true;
+					}
+					let handled = undoHandled.get(evt);
+					if (handled === undefined) {
+						handled = this.editor.handleUndo(redo);
+						undoHandled.set(evt, handled);
+					}
+					return !handled;
+				});
+			}
+		}
 	}
 
 	override onload(): void {
@@ -288,8 +317,10 @@ class DreamTableView extends MarkdownRenderChild {
 		}
 
 		this.location = { lineStart: info.lineStart, lineEnd: info.lineEnd };
+		this.history = this.plugin.histories.find(this.ctx.sourcePath, this.source, info.lineStart);
 		this.editor = new TableEditor(this.containerEl, result.model, {
 			renderMarkdown,
+			history: this.history.history,
 			initialState: this.plugin.takeState(this.stateKey()),
 			onChange: (model, state) => this.save(model, state),
 			onContextMenu: (evt, ranges) => this.showMenu(evt, ranges),
@@ -400,6 +431,8 @@ class DreamTableView extends MarkdownRenderChild {
 
 		const written = await this.plugin.writeBlockBody(this.ctx.sourcePath, this.location, this.source, body, (found) => {
 			this.location = found;
+			// Before the write, which may re-create the table: the new view looks its history up by body.
+			if (this.history) this.plugin.histories.update(this.ctx.sourcePath, this.history, body, found.lineStart);
 			this.plugin.parkState(this.stateKey(), () => this.handOff(state));
 		});
 		if (!written) {

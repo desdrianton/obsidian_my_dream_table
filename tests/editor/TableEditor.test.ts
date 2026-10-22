@@ -9,6 +9,7 @@ import {
 	type EditorState,
 	type TableEditorOptions,
 } from "../../src/editor/TableEditor";
+import { UndoHistory } from "../../src/editor/history";
 import type { RenderMarkdown } from "../../src/render/renderTable";
 
 const r = parseRange;
@@ -739,6 +740,106 @@ describe("changes", () => {
 		key(editor.root, "Delete");
 		await flush();
 		expect(original.getCell(0, 0)).toBe("A1");
+	});
+});
+
+describe("undo", () => {
+	it("undoes a change with Ctrl+Z, selecting what was selected before", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		mouse(td("B2"), "mousedown", { shiftKey: true });
+		key(editor.root, "Delete");
+		await flush();
+		mouse(td("C3"), "mousedown");
+		expect(press("z", { ctrlKey: true }).defaultPrevented).toBe(true);
+		await flush();
+		expect(editor.currentModel.getCell(0, 0)).toBe("A1");
+		expect(td("B2").textContent).toBe("B2");
+		expect(selected()).toBe("A1:B2");
+		expect(onChange).toHaveBeenCalledTimes(2);
+	});
+
+	it("redoes with Ctrl+Shift+Z and Ctrl+Y", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		key(editor.root, "Delete");
+		await flush();
+		key(editor.root, "b", { ctrlKey: true });
+		await flush();
+		await editor.undo();
+		await editor.undo();
+		expect(editor.currentModel.getCell(0, 0)).toBe("A1");
+		expect(editor.currentModel.getStyle(0, 0)).toEqual({});
+
+		press("Z", { ctrlKey: true, shiftKey: true });
+		await flush();
+		expect(editor.currentModel.getCell(0, 0)).toBe("");
+		press("y", { metaKey: true });
+		await flush();
+		expect(editor.currentModel.getStyle(0, 0)).toEqual({ bold: true });
+		expect(await editor.redo()).toBe(false);
+	});
+
+	it("drops what was undone once something else changes", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		key(editor.root, "Delete");
+		await flush();
+		await editor.undo();
+		mouse(td("B1"), "mousedown");
+		key(editor.root, "Delete");
+		await flush();
+		expect(await editor.redo()).toBe(false);
+		expect(editor.currentModel.getCell(0, 0)).toBe("A1");
+	});
+
+	it("leaves Ctrl+Z to an open cell whose text has changed", async () => {
+		await mount(grid());
+		editor.startEdit({ row: 0, col: 0 });
+		input().value = "typed";
+		expect(press("z", { ctrlKey: true }).defaultPrevented).toBe(false);
+		await flush();
+		expect(onChange).not.toHaveBeenCalled();
+		expect(input().value).toBe("typed");
+	});
+
+	it("undoes the last saved cell edit from the next open cell", async () => {
+		await mount(grid());
+		editor.startEdit({ row: 0, col: 0 });
+		input().value = "typed";
+		press("Tab");
+		await flush();
+		expect(input().value).toBe("B1");
+		expect(press("z", { ctrlKey: true }).defaultPrevented).toBe(true);
+		await flush();
+		expect(editor.currentModel.getCell(0, 0)).toBe("A1");
+		expect(input().value).toBe("A1");
+		expect(selected()).toBe("A1");
+	});
+
+	it("keeps the history across editors that share it", async () => {
+		const history = new UndoHistory();
+		await mount(grid(), { history });
+		mouse(td("A1"), "mousedown");
+		key(editor.root, "Delete");
+		await flush();
+		const model = editor.currentModel;
+		editor.destroy();
+		await mount(model, { history });
+		expect(await editor.undo()).toBe(true);
+		expect(editor.currentModel.getCell(0, 0)).toBe("A1");
+	});
+
+	it("can undo again when saving the undo fails", async () => {
+		await mount(grid());
+		mouse(td("A1"), "mousedown");
+		key(editor.root, "Delete");
+		await flush();
+		onChange.mockResolvedValueOnce(false);
+		expect(await editor.undo()).toBe(false);
+		expect(editor.currentModel.getCell(0, 0)).toBe("");
+		expect(await editor.undo()).toBe(true);
+		expect(editor.currentModel.getCell(0, 0)).toBe("A1");
 	});
 });
 

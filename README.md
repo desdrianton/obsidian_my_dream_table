@@ -53,7 +53,7 @@ If the block has a mistake (an unknown key, a bad range or color, …), the tabl
 
 ## Editing in the table
 
-Tables are edited where they are, in Live Preview and Reading view; every change is written back to the code block (and can be undone with the note's undo while it is open in the editor). Tables shown inside an embed are read-only.
+Tables are edited where they are, in Live Preview and Reading view; every change is written back to the code block. Tables shown inside an embed are read-only.
 
 **Editing cells** (there is no separate select mode: the cell you are in is always open for editing)
 - Click a cell to edit its markdown. From the note, moving the cursor into the table with the arrow keys opens its first (or last) cell.
@@ -62,6 +62,7 @@ Tables are edited where they are, in Live Preview and Reading view; every change
 - Enter adds a line; Ctrl/Cmd+Enter saves and starts a new row below; Escape puts back the saved text; clicking elsewhere saves.
 - Ctrl+B / Ctrl+I wrap the selected text in bold / italic, Ctrl+K inserts a link, Ctrl+A selects all of the cell's text.
 - Task checkboxes (`- [ ] todo`) can be ticked right in the table; the change is saved to the cell.
+- Ctrl+Z (Cmd+Z on macOS) undoes the last change to the table and selects the cells it touched; Ctrl+Shift+Z or Ctrl+Y redoes it. While the open cell has unsaved text, they undo and redo typing in that cell instead. A table changed outside the editor (in its source, or with the note's own undo) starts a new history.
 
 **Selecting several cells**
 - Drag across cells or Shift+click to select a range. Merged cells are always selected whole.
