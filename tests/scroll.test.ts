@@ -87,7 +87,25 @@ describe("holdScrollPosition", () => {
 
 	it.each(["wheel", "touchstart", "mousedown"])("lets the user scroll away (%s)", (type) => {
 		holdScrollPosition(scroller, 1200);
+		vi.advanceTimersByTime(0);
 		scroller.dispatchEvent(new Event(type));
+		jump(300);
+		expect(scroller.scrollTop).toBe(300);
+	});
+
+	it("is not released by the mousedown that started it", () => {
+		const target = document.createElement("div");
+		scroller.appendChild(target);
+		// Like a table saving from the capture phase of a click in another table.
+		const start = () => holdScrollPosition(scroller, 1200);
+		document.addEventListener("mousedown", start, true);
+		target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+		document.removeEventListener("mousedown", start, true);
+		jump(0);
+		expect(scroller.scrollTop).toBe(1200);
+
+		vi.advanceTimersByTime(0);
+		scroller.dispatchEvent(new Event("mousedown"));
 		jump(300);
 		expect(scroller.scrollTop).toBe(300);
 	});
