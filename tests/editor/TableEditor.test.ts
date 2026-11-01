@@ -684,7 +684,7 @@ describe("changes", () => {
 		key(editor.root, "b", { ctrlKey: true });
 		await flush();
 		expect(editor.currentModel.getStyle(0, 0)).toEqual({ bold: true });
-		expect(td("A1").style.fontWeight).toBe("bold");
+		expect(td("A1").classList.contains("is-bold")).toBe(true);
 	});
 
 	it("runs actions on the selection", async () => {

@@ -95,7 +95,7 @@ export async function renderTable(
 			if ((frozenRow || frozenCol) && style.bg) {
 				// Laid over an opaque background (see styles.css), so a translucent
 				// color does not let the cells scrolling underneath show through.
-				td.style.backgroundColor = "";
+				td.style.removeProperty("background-color");
 				td.style.setProperty(CELL_BG_VAR, style.bg);
 			}
 
@@ -226,8 +226,9 @@ export function applyCellBorder(el: HTMLElement, border: Border): void {
 export function applyCellStyle(el: HTMLElement, style: ResolvedStyle): void {
 	if (style.bg) el.style.backgroundColor = style.bg;
 	if (style.fg) el.style.color = style.fg;
-	if (style.bold) el.style.fontWeight = "bold";
-	if (style.italic) el.style.fontStyle = "italic";
+	// Constant looks live in the stylesheet, so a theme or snippet can reach them.
+	el.classList.toggle("is-bold", style.bold === true);
+	el.classList.toggle("is-italic", style.italic === true);
 	if (style.align) el.style.textAlign = style.align;
 	if (style.valign) el.style.verticalAlign = style.valign;
 	if (style.padding !== undefined) el.style.padding = `${style.padding}px`;

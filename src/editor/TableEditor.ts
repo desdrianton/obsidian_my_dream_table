@@ -417,7 +417,8 @@ export class TableEditor {
 		// Sized to its content, wrapped lines included, so it never scrolls.
 		input.rows = 1;
 		const fit = () => {
-			input.style.height = "auto";
+			// Dropped first so scrollHeight measures the text, not the height set last time.
+			input.style.removeProperty("height");
 			input.style.height = `${input.scrollHeight}px`;
 		};
 		input.addEventListener("keydown", this.onInputKeyDown);

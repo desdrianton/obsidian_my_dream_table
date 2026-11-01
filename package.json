@@ -1,6 +1,6 @@
 {
   "name": "obsidian-my-dream-table",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Complex tables for Obsidian: merged cells, colors, and a visual editor.",
   "private": true,
   "type": "module",
@@ -13,6 +13,8 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@types/js-yaml": "^4.0.9",
     "esbuild": "^0.25.12",
     "happy-dom": "^21.0.3",

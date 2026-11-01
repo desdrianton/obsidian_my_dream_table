@@ -92,7 +92,7 @@ export default class DreamTablePlugin extends Plugin {
 
 		this.addCommand({
 			id: "convert-markdown-table",
-			name: "Convert Markdown table to Dream Table",
+			name: "Convert Markdown table",
 			editorCheckCallback: (checking, editor) => {
 				if (checking) return this.markdownTableAtCursor(editor) !== null;
 				this.convertTableAtCursor(editor);

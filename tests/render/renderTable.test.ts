@@ -98,7 +98,7 @@ describe("renderTable", () => {
 		);
 		const [a, b] = Array.from(table.rows[0]!.cells);
 		expect(a!.style.backgroundColor).toBe("#ff0000");
-		expect(a!.style.fontWeight).toBe("bold");
+		expect(a!.classList.contains("is-bold")).toBe(true);
 		expect(a!.style.textAlign).toBe("");
 		expect(b!.style.backgroundColor).toBe("var(--color-blue)");
 		expect(b!.style.color).toBe("white");
@@ -370,8 +370,8 @@ describe("applyCellStyle", () => {
 		});
 		expect(td.style.backgroundColor).toBe("red");
 		expect(td.style.color).toBe("blue");
-		expect(td.style.fontWeight).toBe("bold");
-		expect(td.style.fontStyle).toBe("italic");
+		expect(td.classList.contains("is-bold")).toBe(true);
+		expect(td.classList.contains("is-italic")).toBe(true);
 		expect(td.style.textAlign).toBe("center");
 		expect(td.style.verticalAlign).toBe("bottom");
 	});

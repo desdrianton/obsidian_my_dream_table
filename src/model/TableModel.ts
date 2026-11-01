@@ -301,7 +301,7 @@ export class TableModel {
 				else if (value !== undefined) resolved[key] = value;
 			}
 		}
-		return resolved as ResolvedStyle;
+		return resolved;
 	}
 
 	/**

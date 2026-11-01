@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  # Both are needed to sign the attestation that ties the assets to this build.
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -33,6 +36,16 @@ jobs:
       - run: npm test
 
       - run: npm run build
+
+      # Lets anyone verify the assets came from this repo, with:
+      #   gh attestation verify main.js --repo <owner>/<repo>
+      - name: Attest the release assets
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Create the draft release
         env:

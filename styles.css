@@ -135,6 +135,15 @@
 	font-family: inherit;
 }
 
+/* Bold and italic cells. Set here rather than inline so themes can restyle them. */
+.dream-table td.is-bold {
+	font-weight: var(--bold-weight, bold);
+}
+
+.dream-table td.is-italic {
+	font-style: italic;
+}
+
 /* Whole-cell subscript and superscript: smaller text, shifted down or up. */
 .dream-table td:is(.is-sub, .is-sup) > :not(.dream-table-collapse, .dream-table-input) {
 	position: relative;
