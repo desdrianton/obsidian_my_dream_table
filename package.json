@@ -1,6 +1,6 @@
 {
   "name": "obsidian-my-dream-table",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Complex tables for Obsidian: merged cells, colors, and a visual editor.",
   "private": true,
   "type": "module",

@@ -1,7 +1,7 @@
 {
 	"id": "dream-table",
 	"name": "Dream Table",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"minAppVersion": "1.5.7",
 	"description": "Complex tables with merged cells, background and text colors, and alignment.",
 	"author": "desdrianton",
