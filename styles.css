@@ -12,9 +12,11 @@
 
 /*
  * Live Preview outlines a code block while it is hovered. The table already
- * shows its own borders, so the extra frame only flickers around it.
+ * shows its own borders, so the extra frame only flickers around it. The
+ * marker class is put on the block by the plugin, since :has() would make the
+ * browser re-check this selector on every change anywhere in the note.
  */
-.markdown-source-view.mod-cm6 .cm-embed-block:has(.dream-table-wrapper, .dream-table-error):hover {
+.markdown-source-view.mod-cm6 .cm-embed-block.has-dream-table:hover {
 	box-shadow: none;
 }
 

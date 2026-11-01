@@ -301,6 +301,7 @@ class DreamTableView extends MarkdownRenderChild {
 
 	override onload(): void {
 		this.plugin.tables.add(this);
+		this.markEmbedBlock();
 		const result = parseCodeBlock(this.source, parseYaml);
 		if (!result.ok) {
 			renderErrors(this.containerEl, result.errors);
@@ -312,7 +313,7 @@ class DreamTableView extends MarkdownRenderChild {
 
 		const info = this.ctx.getSectionInfo(this.containerEl);
 		if (!info) {
-			void renderTable(result.model, this.containerEl, renderMarkdown);
+			void renderTable(result.model, this.containerEl, renderMarkdown).then(() => this.markEmbedBlock());
 			return;
 		}
 
@@ -331,7 +332,16 @@ class DreamTableView extends MarkdownRenderChild {
 			keepsSelection: (target) => target.closest(".menu, .modal-container") !== null,
 			onExit: (side) => this.moveCursorOut(side),
 		});
-		void this.editor.render();
+		void this.editor.render().then(() => this.markEmbedBlock());
+	}
+
+	/**
+	 * Tells the stylesheet that this Live Preview block holds a table, so the
+	 * hover outline Obsidian draws around code blocks can be turned off. Called
+	 * again after rendering, since the block may not be in the document yet.
+	 */
+	private markEmbedBlock(): void {
+		this.containerEl.closest(".cm-embed-block")?.classList.add("has-dream-table");
 	}
 
 	override onunload(): void {

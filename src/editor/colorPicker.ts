@@ -28,44 +28,28 @@ export interface ColorPickerOptions {
 
 /** Builds the swatch grid, a "None" button, and a custom color input. */
 export function buildColorPicker(container: HTMLElement, options: ColorPickerOptions): void {
-	const doc = container.ownerDocument;
-	const root = doc.createElement("div");
-	root.className = "dream-table-color-picker";
+	const root = container.createDiv({ cls: "dream-table-color-picker" });
 
-	const grid = doc.createElement("div");
-	grid.className = "dream-table-swatches";
+	const grid = root.createDiv({ cls: "dream-table-swatches" });
 	for (const swatch of options.swatches) {
-		const button = doc.createElement("button");
-		button.className = "dream-table-swatch";
-		button.type = "button";
-		button.title = swatch.label;
-		button.setAttribute("aria-label", swatch.label);
+		const button = grid.createEl("button", {
+			cls: "dream-table-swatch",
+			type: "button",
+			title: swatch.label,
+			attr: { "aria-label": swatch.label },
+		});
 		button.style.background = swatch.value;
 		if (swatch.value === options.current) button.classList.add("is-active");
 		button.addEventListener("click", () => options.onPick(swatch.value));
-		grid.appendChild(button);
 	}
-	root.appendChild(grid);
 
-	const footer = doc.createElement("div");
-	footer.className = "dream-table-color-footer";
+	const footer = root.createDiv({ cls: "dream-table-color-footer" });
 
-	const none = doc.createElement("button");
-	none.type = "button";
-	none.textContent = "None";
+	const none = footer.createEl("button", { type: "button", text: "None" });
 	none.addEventListener("click", () => options.onPick(null));
-	footer.appendChild(none);
 
-	const custom = doc.createElement("label");
-	custom.className = "dream-table-custom-color";
-	custom.textContent = "Custom: ";
-	const input = doc.createElement("input");
-	input.type = "color";
+	const custom = footer.createEl("label", { cls: "dream-table-custom-color", text: "Custom: " });
+	const input = custom.createEl("input", { type: "color" });
 	if (options.current && /^#[0-9a-f]{6}$/i.test(options.current)) input.value = options.current;
 	input.addEventListener("change", () => options.onPick(input.value));
-	custom.appendChild(input);
-	footer.appendChild(custom);
-
-	root.appendChild(footer);
-	container.appendChild(root);
 }

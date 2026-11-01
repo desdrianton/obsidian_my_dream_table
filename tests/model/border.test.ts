@@ -1,4 +1,4 @@
-import { load } from "js-yaml";
+import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import { parseRange } from "../../src/model/address";
 import { isBorderStyle, isValidBorderWidth, parseTableData } from "../../src/model/schema";
@@ -140,6 +140,6 @@ describe("borders in the model", () => {
 		const text = serializeTable(m.toData());
 		expect(text).toContain('border: { color: "var(--text-faint)", width: 0, style: "none" }');
 		expect(text).toContain('borderColor: "#ff0000", borderWidth: 2, borderStyle: "double"');
-		expect(model(load(text)).toData()).toEqual(m.toData());
+		expect(model(parseYaml(text)).toData()).toEqual(m.toData());
 	});
 });

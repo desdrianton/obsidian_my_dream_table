@@ -1,4 +1,4 @@
-import { load } from "js-yaml";
+import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import {
 	CODE_BLOCK_LANGUAGE,
@@ -20,7 +20,7 @@ describe("parseCodeBlock", () => {
 			'    bg: "#eeeeee"',
 			"    bold: true",
 		].join("\n");
-		const result = parseCodeBlock(source, load);
+		const result = parseCodeBlock(source, parseYaml);
 		if (!result.ok) throw new Error(result.errors.join("; "));
 		expect(result.model.getCell(1, 1)).toBe("120");
 		expect(result.model.getMergeAt(0, 2)).toEqual({ top: 0, left: 1, bottom: 0, right: 2 });
@@ -28,12 +28,12 @@ describe("parseCodeBlock", () => {
 	});
 
 	it("reports an empty block with a hint", () => {
-		const result = parseCodeBlock("  \n", load);
+		const result = parseCodeBlock("  \n", parseYaml);
 		expect(result).toEqual({ ok: false, errors: [expect.stringMatching(/rows:/)] });
 	});
 
 	it("reports YAML syntax errors instead of throwing", () => {
-		const result = parseCodeBlock("rows: [unclosed", load);
+		const result = parseCodeBlock("rows: [unclosed", parseYaml);
 		expect(result.ok).toBe(false);
 		if (!result.ok) expect(result.errors[0]).toMatch(/^Invalid YAML: /);
 	});
@@ -46,7 +46,7 @@ describe("parseCodeBlock", () => {
 	});
 
 	it("passes schema errors through", () => {
-		const result = parseCodeBlock("rows: [[a]]\nmerges: [A1]", load);
+		const result = parseCodeBlock("rows: [[a]]\nmerges: [A1]", parseYaml);
 		expect(result.ok).toBe(false);
 		if (!result.ok) expect(result.errors[0]).toMatch(/more than one cell/);
 	});
@@ -62,7 +62,7 @@ describe("toCodeBlock", () => {
 		expect(block.endsWith("\n```\n")).toBe(true);
 
 		const inner = block.slice(block.indexOf("\n") + 1, block.lastIndexOf("```"));
-		const result = parseCodeBlock(inner, load);
+		const result = parseCodeBlock(inner, parseYaml);
 		if (!result.ok) throw new Error(result.errors.join("; "));
 		expect(result.model.toData()).toEqual(model.toData());
 	});

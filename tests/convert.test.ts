@@ -1,4 +1,4 @@
-import { load } from "js-yaml";
+import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import { parseCodeBlock } from "../src/codeblock";
 import { convertMarkdownTable, findMarkdownTable, parseMarkdownTable } from "../src/convert";
@@ -83,7 +83,7 @@ describe("convertMarkdownTable", () => {
 		const lines = block.split("\n");
 		expect(lines[0]).toBe("```dreamtable");
 		expect(lines[lines.length - 1]).toBe("```");
-		const result = parseCodeBlock(lines.slice(1, -1).join("\n"), load);
+		const result = parseCodeBlock(lines.slice(1, -1).join("\n"), parseYaml);
 		if (!result.ok) throw new Error(result.errors.join("; "));
 		expect(result.model.getCell(1, 0)).toBe("Laptop");
 		expect(result.model.getStyle(1, 1)).toEqual({ align: "right" });

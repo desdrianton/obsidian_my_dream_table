@@ -1,4 +1,4 @@
-import { load } from "js-yaml";
+import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import { parseRange } from "../../src/model/address";
 import { isValidFontFamily, isValidFontSize, parseTableData } from "../../src/model/schema";
@@ -139,7 +139,7 @@ describe("font in the model", () => {
 		expect(text).toContain("fontSize: 13\n");
 		expect(text).toContain('fontFamily: "\\"Fira Code\\", monospace"\n');
 		expect(text).toContain('{ range: "A1:B1", fontSize: 18, fontFamily: "Georgia, serif", script: "sub" }');
-		expect(model(load(text)).toData()).toEqual(m.toData());
+		expect(model(parseYaml(text)).toData()).toEqual(m.toData());
 	});
 
 	it("omits the table font when unset", () => {

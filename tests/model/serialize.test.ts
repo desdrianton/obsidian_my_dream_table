@@ -1,11 +1,11 @@
-import { load } from "js-yaml";
+import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import { serializeTable } from "../../src/model/serialize";
 import { TableModel } from "../../src/model/TableModel";
 import type { TableData } from "../../src/model/types";
 
 function roundTrip(data: TableData): unknown {
-	return load(serializeTable(data));
+	return parseYaml(serializeTable(data));
 }
 
 describe("serializeTable", () => {

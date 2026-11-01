@@ -142,10 +142,8 @@ export class TableEditor {
 		this.model = model;
 		this.history = options.history ?? new UndoHistory();
 		this.doc = container.ownerDocument;
-		this.root = this.doc.createElement("div");
-		this.root.className = "dream-table-editor";
+		this.root = container.createDiv({ cls: "dream-table-editor" });
 		this.root.tabIndex = 0;
-		container.appendChild(this.root);
 
 		this.focusAfterRender = options.initialState?.focused === true;
 		this.scrollAfterRender = options.initialState?.scroll ?? null;
@@ -161,7 +159,8 @@ export class TableEditor {
 		this.root.addEventListener("mouseleave", () => this.root.classList.remove("is-resize-hover"));
 		this.root.addEventListener("click", this.onClick);
 		this.root.addEventListener("dblclick", this.onDoubleClick);
-		this.root.addEventListener("contextmenu", this.onContextMenu);
+		// Wrapped because the handler is async and a listener returns void.
+		this.root.addEventListener("contextmenu", (evt) => void this.onContextMenu(evt));
 		this.root.addEventListener("keydown", this.onKeyDown);
 		this.root.addEventListener("focusin", this.onFocusIn);
 		this.root.addEventListener("focusout", this.onFocusOut);
@@ -411,8 +410,8 @@ export class TableEditor {
 		const td = this.cellElement(target);
 		if (!td) return;
 
-		const input = this.doc.createElement("textarea");
-		input.className = "dream-table-input";
+		td.empty();
+		const input = td.createEl("textarea", { cls: "dream-table-input" });
 		input.value = initialText ?? this.model.getCell(target.row, target.col);
 		// Sized to its content, wrapped lines included, so it never scrolls.
 		input.rows = 1;
@@ -426,7 +425,6 @@ export class TableEditor {
 		// Focus went elsewhere (another app, the note), so do not take it back.
 		input.addEventListener("blur", () => void this.commitEdit(0, 0, true, false));
 
-		td.replaceChildren(input);
 		td.classList.add("is-editing");
 		fit();
 		this.editing = { cell: target, input };

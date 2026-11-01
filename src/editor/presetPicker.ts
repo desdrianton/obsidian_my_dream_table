@@ -61,45 +61,34 @@ export interface PresetPickerOptions {
  * a click (or a picked custom color) applies that preset.
  */
 export function buildPresetPicker(container: HTMLElement, options: PresetPickerOptions): void {
-	const doc = container.ownerDocument;
 	const swatches = options.swatches ?? BACKGROUND_SWATCHES;
-	const root = doc.createElement("div");
-	root.className = "dream-table-preset-picker";
+	const root = container.createDiv({ cls: "dream-table-preset-picker" });
 
 	for (const preset of TABLE_PRESETS) {
-		const section = doc.createElement("div");
-		section.className = "dream-table-preset";
+		const section = root.createDiv({ cls: "dream-table-preset" });
+		section.createDiv({ cls: "dream-table-preset-title", text: preset.title });
 
-		const heading = doc.createElement("div");
-		heading.className = "dream-table-preset-title";
-		heading.textContent = preset.title;
-		section.appendChild(heading);
-
-		const grid = doc.createElement("div");
-		grid.className = "dream-table-swatches";
+		const grid = section.createDiv({ cls: "dream-table-swatches" });
 		for (const swatch of swatches) {
-			const button = doc.createElement("button");
-			button.className = "dream-table-swatch";
-			button.type = "button";
-			button.title = `${preset.title}: ${swatch.label}`;
-			button.setAttribute("aria-label", button.title);
+			const label = `${preset.title}: ${swatch.label}`;
+			const button = grid.createEl("button", {
+				cls: "dream-table-swatch",
+				type: "button",
+				title: label,
+				attr: { "aria-label": label },
+			});
 			button.style.background = swatch.value;
 			button.addEventListener("click", () => options.onPick(preset, swatch.value));
-			grid.appendChild(button);
 		}
-		section.appendChild(grid);
 
-		const custom = doc.createElement("label");
-		custom.className = "dream-table-custom-color dream-table-preset-custom";
-		custom.textContent = "Custom: ";
-		const input = doc.createElement("input");
-		input.type = "color";
-		input.setAttribute("aria-label", `${preset.title}: custom color`);
+		const custom = section.createEl("label", {
+			cls: "dream-table-custom-color dream-table-preset-custom",
+			text: "Custom: ",
+		});
+		const input = custom.createEl("input", {
+			type: "color",
+			attr: { "aria-label": `${preset.title}: custom color` },
+		});
 		input.addEventListener("change", () => options.onPick(preset, input.value));
-		custom.appendChild(input);
-		section.appendChild(custom);
-
-		root.appendChild(section);
 	}
-	container.appendChild(root);
 }

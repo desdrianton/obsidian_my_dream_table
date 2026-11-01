@@ -1,4 +1,4 @@
-import { load } from "js-yaml";
+import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import { parseRange } from "../../src/model/address";
 import { isValidLineHeight, parseTableData, roundLineHeight } from "../../src/model/schema";
@@ -104,7 +104,7 @@ describe("line height in the model", () => {
 		const text = serializeTable(m.toData());
 		expect(text).toContain("lineHeight: 1.75\n");
 		expect(text).toContain('{ range: "A1:B1", lineHeight: 1 }');
-		expect(model(load(text)).toData()).toEqual(m.toData());
+		expect(model(parseYaml(text)).toData()).toEqual(m.toData());
 	});
 
 	it("omits the table line height when unset", () => {

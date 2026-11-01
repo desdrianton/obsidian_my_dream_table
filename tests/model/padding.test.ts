@@ -1,4 +1,4 @@
-import { load } from "js-yaml";
+import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import { parseRange } from "../../src/model/address";
 import { isValidPadding, parseTableData } from "../../src/model/schema";
@@ -102,7 +102,7 @@ describe("padding in the model", () => {
 		const text = serializeTable(m.toData());
 		expect(text).toContain("padding: 0\n");
 		expect(text).toContain('{ range: "A1:B1", padding: 16 }');
-		const back = model(load(text));
+		const back = model(parseYaml(text));
 		expect(back.tablePadding).toBe(0);
 		expect(back.getPadding(0, 0)).toBe(16);
 		expect(back.toData()).toEqual(m.toData());

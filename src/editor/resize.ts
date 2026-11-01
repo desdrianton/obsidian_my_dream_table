@@ -44,7 +44,7 @@ export function resizedWidths(
  * cells get an equal share of the merge's width.
  */
 export function measureColumnWidths(table: HTMLTableElement, colCount: number): number[] {
-	const measured: (number | null)[] = Array(colCount).fill(null);
+	const measured: (number | null)[] = Array.from({ length: colCount }, () => null);
 	const merged: HTMLTableCellElement[] = [];
 	for (const td of Array.from(table.querySelectorAll<HTMLTableCellElement>("td[data-col]"))) {
 		const col = Number(td.dataset.col);

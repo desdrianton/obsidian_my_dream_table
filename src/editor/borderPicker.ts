@@ -34,8 +34,7 @@ export interface BorderPickerOptions {
 export function buildBorderPicker(container: HTMLElement, options: BorderPickerOptions): void {
 	const doc = container.ownerDocument;
 	const choice: BorderChoice = { ...options.current };
-	const root = doc.createElement("div");
-	root.className = "dream-table-border-picker";
+	const root = container.createDiv({ cls: "dream-table-border-picker" });
 
 	const refreshers: (() => void)[] = [];
 	const refresh = () => refreshers.forEach((fn) => fn());
@@ -46,21 +45,17 @@ export function buildBorderPicker(container: HTMLElement, options: BorderPickerO
 		key: K,
 		items: { label: string; value: BorderChoice[K]; swatch?: string }[],
 	): HTMLElement {
-		const row = doc.createElement("div");
-		row.className = `dream-table-border-row dream-table-border-${key}`;
-		const heading = doc.createElement("div");
-		heading.className = "dream-table-border-heading";
-		heading.textContent = title;
-		row.appendChild(heading);
+		const row = root.createDiv({ cls: `dream-table-border-row dream-table-border-${key}` });
+		row.createDiv({ cls: "dream-table-border-heading", text: title });
 
-		const buttons = doc.createElement("div");
-		buttons.className = "dream-table-border-options";
+		const buttons = row.createDiv({ cls: "dream-table-border-options" });
 		for (const item of items) {
-			const button = doc.createElement("button");
-			button.type = "button";
-			button.dataset.value = String(item.value);
+			const button = buttons.createEl("button", {
+				type: "button",
+				attr: { "data-value": String(item.value) },
+			});
 			if (item.swatch) {
-				button.className = "dream-table-swatch";
+				button.classList.add("dream-table-swatch");
 				button.style.background = item.swatch;
 				button.title = item.label;
 				button.setAttribute("aria-label", item.label);
@@ -72,31 +67,30 @@ export function buildBorderPicker(container: HTMLElement, options: BorderPickerO
 				refresh();
 			});
 			refreshers.push(() => button.classList.toggle("is-active", choice[key] === item.value));
-			buttons.appendChild(button);
 		}
-		row.appendChild(buttons);
 		return row;
 	}
 
-	root.appendChild(
-		optionRow("Style", "style", [
-			{ label: "Default", value: null },
-			...BORDER_STYLES.map((s) => ({ label: s[0]!.toUpperCase() + s.slice(1), value: s })),
-		]),
-	);
+	optionRow("Style", "style", [
+		{ label: "Default", value: null },
+		...BORDER_STYLES.map((s) => ({ label: s[0]!.toUpperCase() + s.slice(1), value: s })),
+	]);
 
 	const widthRow = optionRow("Width", "width", [
 		{ label: "Default", value: null },
 		...BORDER_WIDTH_PRESETS.map((w) => ({ label: `${w}px`, value: w })),
 	]);
-	const widthInput = doc.createElement("input");
-	widthInput.type = "number";
-	widthInput.min = String(MIN_BORDER_WIDTH);
-	widthInput.max = String(MAX_BORDER_WIDTH);
-	widthInput.step = "1";
-	widthInput.placeholder = "px";
-	widthInput.className = "dream-table-border-width-input";
-	widthInput.setAttribute("aria-label", "Custom border width in px");
+	const widthInput = widthRow.querySelector(".dream-table-border-options")!.createEl("input", {
+		type: "number",
+		placeholder: "px",
+		cls: "dream-table-border-width-input",
+		attr: {
+			min: String(MIN_BORDER_WIDTH),
+			max: String(MAX_BORDER_WIDTH),
+			step: "1",
+			"aria-label": "Custom border width in px",
+		},
+	});
 	widthInput.addEventListener("input", () => {
 		const value = widthInput.value.trim() === "" ? Number.NaN : Number(widthInput.value);
 		const valid = isValidBorderWidth(value);
@@ -109,17 +103,16 @@ export function buildBorderPicker(container: HTMLElement, options: BorderPickerO
 	refreshers.push(() => {
 		if (doc.activeElement !== widthInput) widthInput.value = choice.width === null ? "" : String(choice.width);
 	});
-	widthRow.querySelector(".dream-table-border-options")!.appendChild(widthInput);
-	root.appendChild(widthRow);
 
 	const colorRow = optionRow("Color", "color", [
 		{ label: "Default", value: null },
 		...BORDER_SWATCHES.map((s) => ({ label: s.label, value: s.value, swatch: s.value })),
 	]);
-	const colorInput = doc.createElement("input");
-	colorInput.type = "color";
-	colorInput.title = "Custom color";
-	colorInput.setAttribute("aria-label", "Custom border color");
+	const colorInput = colorRow.querySelector(".dream-table-border-options")!.createEl("input", {
+		type: "color",
+		title: "Custom color",
+		attr: { "aria-label": "Custom border color" },
+	});
 	colorInput.addEventListener("input", () => {
 		choice.color = colorInput.value;
 		refresh();
@@ -129,33 +122,18 @@ export function buildBorderPicker(container: HTMLElement, options: BorderPickerO
 		colorInput.classList.toggle("is-active", custom);
 		if (custom) colorInput.value = choice.color!;
 	});
-	colorRow.querySelector(".dream-table-border-options")!.appendChild(colorInput);
-	root.appendChild(colorRow);
-
-	const preview = doc.createElement("div");
-	preview.className = "dream-table-border-preview";
-	preview.textContent = "Preview";
+	const preview = root.createDiv({ cls: "dream-table-border-preview", text: "Preview" });
 	refreshers.push(() => {
 		preview.style.borderWidth = choice.width === null ? "" : `${choice.width}px`;
 		preview.style.borderStyle = choice.style ?? "";
 		preview.style.borderColor = choice.color ?? "";
 	});
-	root.appendChild(preview);
 
-	const footer = doc.createElement("div");
-	footer.className = "dream-table-border-footer";
-	const reset = doc.createElement("button");
-	reset.type = "button";
-	reset.textContent = options.resetLabel;
+	const footer = root.createDiv({ cls: "dream-table-border-footer" });
+	const reset = footer.createEl("button", { type: "button", text: options.resetLabel });
 	reset.addEventListener("click", () => options.onApply({ color: null, width: null, style: null }));
-	const apply = doc.createElement("button");
-	apply.type = "button";
-	apply.className = "mod-cta";
-	apply.textContent = "Apply";
+	const apply = footer.createEl("button", { type: "button", cls: "mod-cta", text: "Apply" });
 	apply.addEventListener("click", () => options.onApply({ ...choice }));
-	footer.append(reset, apply);
-	root.appendChild(footer);
 
 	refresh();
-	container.appendChild(root);
 }

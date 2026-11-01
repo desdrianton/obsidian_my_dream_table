@@ -34,41 +34,29 @@ export async function renderTable(
 	renderMarkdown: RenderMarkdown,
 	onToggleCollapse?: ToggleCollapse,
 ): Promise<HTMLTableElement> {
-	const doc = container.ownerDocument;
-	const wrapper = doc.createElement("div");
-	wrapper.className = `${CLASS_PREFIX}-wrapper`;
-	const table = doc.createElement("table");
-	table.className = CLASS_PREFIX;
-	const colgroup = doc.createElement("colgroup");
+	const wrapper = container.createDiv({ cls: `${CLASS_PREFIX}-wrapper` });
+	const table = wrapper.createEl("table", { cls: CLASS_PREFIX });
+	const colgroup = table.createEl("colgroup");
 	for (let col = 0; col < model.colCount; col++) {
-		const colEl = doc.createElement("col");
-		colEl.dataset.col = String(col);
-		colgroup.appendChild(colEl);
+		colgroup.createEl("col", { attr: { "data-col": String(col) } });
 	}
-	table.appendChild(colgroup);
 	applyColumnWidths(table, model.columnWidths);
 	const header = model.headerRows;
-	const thead = header > 0 ? doc.createElement("thead") : null;
-	const tbody = doc.createElement("tbody");
-	if (thead) table.appendChild(thead);
-	table.appendChild(tbody);
+	const thead = header > 0 ? table.createEl("thead") : null;
+	const tbody = table.createEl("tbody");
 	table.classList.toggle("is-collapsed", header > 0 && model.collapsed);
 	wrapper.classList.toggle("has-frozen-rows", model.freezeRows > 0);
 	wrapper.classList.toggle("has-max-height", model.maxHeight !== null);
 	if (model.maxHeight !== null) wrapper.style.maxHeight = `${model.maxHeight}px`;
 	if (model.maxWidth !== null) wrapper.style.maxWidth = `${model.maxWidth}px`;
-	wrapper.appendChild(table);
-	container.appendChild(wrapper);
 
 	const pending: Promise<void>[] = [];
 	for (let row = 0; row < model.rowCount; row++) {
-		const tr = doc.createElement("tr");
+		const tr = (row < header ? thead! : tbody).createEl("tr");
 		for (let col = 0; col < model.colCount; col++) {
 			if (model.isCovered(row, col)) continue;
 
-			const td = doc.createElement("td");
-			td.dataset.row = String(row);
-			td.dataset.col = String(col);
+			const td = tr.createEl("td", { attr: { "data-row": String(row), "data-col": String(col) } });
 			const merge = model.getMergeAt(row, col);
 			if (merge) {
 				td.rowSpan = merge.bottom - merge.top + 1;
@@ -101,15 +89,13 @@ export async function renderTable(
 
 			const content = model.getCell(row, col);
 			if (content !== "") pending.push(renderMarkdown(preserveBlankLines(content), td));
-			tr.appendChild(td);
 		}
-		(row < header ? thead! : tbody).appendChild(tr);
 	}
 
 	await Promise.all(pending);
 	// Added last so rendering the cell's markdown cannot replace it.
 	const first = thead?.querySelector<HTMLTableCellElement>("td[data-row='0'][data-col='0']");
-	first?.prepend(createCollapseButton(table, onToggleCollapse));
+	if (first) addCollapseButton(first, table, onToggleCollapse);
 	if (model.freezeRows > 0 || model.freezeCols > 0) trackFrozenOffsets(table);
 	return table;
 }
@@ -155,12 +141,13 @@ export function updateFrozenOffsets(table: HTMLTableElement): void {
 	});
 }
 
-/** Chevron that hides or shows the body rows. */
-function createCollapseButton(table: HTMLTableElement, onToggle?: ToggleCollapse): HTMLButtonElement {
-	const doc = table.ownerDocument;
-	const button = doc.createElement("button");
-	button.type = "button";
-	button.className = `${CLASS_PREFIX}-collapse`;
+/** Puts the chevron that hides or shows the body rows in front of `cell`'s content. */
+function addCollapseButton(cell: HTMLElement, table: HTMLTableElement, onToggle?: ToggleCollapse): void {
+	const button = cell.createEl("button", {
+		type: "button",
+		cls: `${CLASS_PREFIX}-collapse`,
+		prepend: true,
+	});
 	// Focus stays on the table, so its keyboard handling keeps working.
 	button.tabIndex = -1;
 	const sync = () => {
@@ -185,7 +172,6 @@ function createCollapseButton(table: HTMLTableElement, onToggle?: ToggleCollapse
 		table.classList.toggle("is-collapsed");
 		sync();
 	});
-	return button;
 }
 
 /**
@@ -250,20 +236,8 @@ export function applyCellStyle(el: HTMLElement, style: ResolvedStyle): void {
 
 /** Shows parse errors in place of the table. */
 export function renderErrors(container: HTMLElement, errors: readonly string[]): void {
-	const doc = container.ownerDocument;
-	const box = doc.createElement("div");
-	box.className = `${CLASS_PREFIX}-error`;
-
-	const title = doc.createElement("strong");
-	title.textContent = "Dream Table: cannot render this table";
-	box.appendChild(title);
-
-	const list = doc.createElement("ul");
-	for (const error of errors) {
-		const li = doc.createElement("li");
-		li.textContent = error;
-		list.appendChild(li);
-	}
-	box.appendChild(list);
-	container.appendChild(box);
+	const box = container.createDiv({ cls: `${CLASS_PREFIX}-error` });
+	box.createEl("strong", { text: "Dream Table: cannot render this table" });
+	const list = box.createEl("ul");
+	for (const error of errors) list.createEl("li", { text: error });
 }

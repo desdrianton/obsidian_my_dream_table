@@ -19,6 +19,8 @@ To try it in a vault, copy or symlink `main.js`, `manifest.json`, and `styles.cs
 - `src/editor/` — selection, keyboard and mouse handling, and the pickers behind the right-click menu.
 - `src/main.ts` — the Obsidian plugin: commands, the code block processor, and writing changes back to the note.
 - `tests/` — unit tests, run with [Vitest](https://vitest.dev) against happy-dom.
+- `tests/setup/obsidianDom.ts` — stands in for the DOM helpers (`createEl` and friends)
+  that Obsidian adds at runtime and happy-dom does not have.
 
 ## Releases
 

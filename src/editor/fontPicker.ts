@@ -59,53 +59,37 @@ export interface FontFamilyPickerOptions {
 
 /** Builds preset buttons (each shown in its own font), a reset button, and a custom font input. */
 export function buildFontFamilyPicker(container: HTMLElement, options: FontFamilyPickerOptions): void {
-	const doc = container.ownerDocument;
-	const root = doc.createElement("div");
-	root.className = "dream-table-value-picker dream-table-font-family-picker";
+	const root = container.createDiv({ cls: "dream-table-value-picker dream-table-font-family-picker" });
 
-	const presets = doc.createElement("div");
-	presets.className = "dream-table-value-presets dream-table-font-family-presets";
+	const presets = root.createDiv({ cls: "dream-table-value-presets dream-table-font-family-presets" });
 	for (const preset of FONT_FAMILY_PRESETS) {
-		const button = doc.createElement("button");
-		button.type = "button";
-		button.className = "dream-table-value-preset dream-table-font-family-preset";
-		button.textContent = preset.label;
-		button.title = preset.value;
+		const button = presets.createEl("button", {
+			type: "button",
+			cls: "dream-table-value-preset dream-table-font-family-preset",
+			text: preset.label,
+			title: preset.value,
+		});
 		button.style.fontFamily = preset.value;
 		if (preset.value === options.current) button.classList.add("is-active", "mod-cta");
 		button.addEventListener("click", () => options.onPick(preset.value));
-		presets.appendChild(button);
 	}
-	root.appendChild(presets);
 
-	const footer = doc.createElement("div");
-	footer.className = "dream-table-value-footer dream-table-font-family-footer";
+	const footer = root.createDiv({ cls: "dream-table-value-footer dream-table-font-family-footer" });
 
-	const reset = doc.createElement("button");
-	reset.type = "button";
-	reset.textContent = options.resetLabel;
+	const reset = footer.createEl("button", { type: "button", text: options.resetLabel });
 	if (options.current === null) reset.classList.add("is-active");
 	reset.addEventListener("click", () => options.onPick(null));
-	footer.appendChild(reset);
 
-	const custom = doc.createElement("label");
-	custom.className = "dream-table-value-custom dream-table-font-family-custom";
+	const custom = footer.createEl("label", { cls: "dream-table-value-custom dream-table-font-family-custom" });
 	custom.append("Custom: ");
-	const input = doc.createElement("input");
-	input.type = "text";
-	input.placeholder = '"Fira Code", monospace';
+	const input = custom.createEl("input", { type: "text", placeholder: '"Fira Code", monospace' });
 	input.spellcheck = false;
 	if (options.current !== null && !FONT_FAMILY_PRESETS.some((p) => p.value === options.current)) {
 		input.value = options.current;
 	}
-	custom.appendChild(input);
 	custom.append(" ");
 
-	const apply = doc.createElement("button");
-	apply.type = "button";
-	apply.textContent = "Apply";
-	custom.appendChild(apply);
-	footer.appendChild(custom);
+	const apply = custom.createEl("button", { type: "button", text: "Apply" });
 
 	const submit = () => {
 		const value = input.value.trim();
@@ -122,6 +106,4 @@ export function buildFontFamilyPicker(container: HTMLElement, options: FontFamil
 		}
 	});
 
-	root.appendChild(footer);
-	container.appendChild(root);
 }

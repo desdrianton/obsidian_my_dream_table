@@ -1,4 +1,4 @@
-import { load } from "js-yaml";
+import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import { parseTableData, type ParseResult } from "../../src/model/schema";
 import { serializeTable } from "../../src/model/serialize";
@@ -105,6 +105,6 @@ describe("widths in the model", () => {
 		const m = model({ rows, widths: [120, null, 80] });
 		const text = serializeTable(m.toData());
 		expect(text).toContain("widths: [120, null, 80]");
-		expect(model(load(text)).columnWidths).toEqual([120, null, 80]);
+		expect(model(parseYaml(text)).columnWidths).toEqual([120, null, 80]);
 	});
 });
