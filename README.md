@@ -54,6 +54,8 @@ Right-click anywhere in the table for the full menu. In short:
 - **Header and freezing** — mark the top rows as a header, collapse the table down to it, or freeze rows and columns in place.
 - **Images** — *Insert image…* picks one from your vault. You can also paste or drop an image straight onto a cell; it is saved as an attachment like any other.
 
+![The right-click menu open beside a table](docs/menu.png)
+
 ## Frozen rows and columns
 
 Set a few rows and columns to stay put, and a long or wide table scrolls inside its own box while the headers remain visible — like freeze panes in a spreadsheet.
